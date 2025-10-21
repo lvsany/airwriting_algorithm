@@ -53,7 +53,7 @@ class ConnectStrokeDetector:
 
     def _segment_ok(self, metrics: dict) -> bool:
         # 硬约束：角度要够“斜上”，长度在合理范围
-        if metrics["angle_deg"] > self.angle_max_deg:
+        if metrics["angle"] > self.angle_max_deg:
             return False
         if not (self.len_min_px <= metrics["length"] <= self.len_max_px):
             return False
@@ -107,13 +107,12 @@ class ConnectStrokeDetector:
                 score = self.scorer.score_geom(
                     straight=geom_metrics['straightness'],
                     mean_curv=geom_metrics['mean_curvature'],
-                    angle_deg=geom_metrics['angle_deg']
+                    angle_deg=geom_metrics['angle']
                 )
                 
                 # 获取所属gap_id
                 gap_id = self.get_gap_id(line_id, boundary_lines)
 
-                print(f"Gap ID for line {line_id}: {gap_id}")
                 
                 conn_seg = ConnSeg(
                     i=start_idx,

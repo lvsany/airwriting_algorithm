@@ -652,3 +652,94 @@ class ProjectionVisualizer:
             上一次的PcaPack对象，若无则为None
         """
         return self._last_pcapack
+
+    def simple_projection_with_conn_segs(self,
+                                         traces: List[List[TracePoint]],
+                                         boundary_lines: List[dict],
+                                         conn_segs_by_trace: dict = None,
+                                         canvas_size: Tuple[int, int] = (1280, 720),
+                                         save_path: Optional[str] = None) -> np.ndarray:
+        """
+        A lightweight projection visualization: draw trajectories and red boundary lines.
+        Optionally overlay detected connected segments (dashed) provided per-trace.
+
+        Args:
+            traces: list of trajectories (each a list of TracePoint or Nx2 numpy array)
+            boundary_lines: list of dicts as produced by `generate_trajectory_projection`
+            conn_segs_by_trace: mapping trace_idx -> list of segments, where each segment
+                has attributes `i`, `j` and optionally `score`/`geom`.
+            canvas_size: output canvas size
+            save_path: optional path to save the image
+
+        Returns:
+            rgb image as numpy array
+        """
+        fig, ax = plt.subplots(figsize=(canvas_size[0] / 100, canvas_size[1] / 100))
+
+        # draw traces
+        for t_idx, trace in enumerate(traces):
+            if isinstance(trace, np.ndarray):
+                pts = trace
+            else:
+                # TracePoint objects have .x and .y
+                pts = np.array([[p.x, p.y] for p in trace]) if len(trace) > 0 else np.zeros((0, 2))
+            if pts.shape[0] == 0:
+                continue
+            ax.plot(pts[:, 0], pts[:, 1], color='black', linewidth=2, zorder=3)
+
+            # overlay conn segments for this trace
+            if conn_segs_by_trace and t_idx in conn_segs_by_trace:
+                for seg in conn_segs_by_trace[t_idx]:
+                    i, j = int(seg.i), int(seg.j)
+                    if i < 0 or j >= pts.shape[0] or i >= j:
+                        continue
+                    ax.plot(pts[i:j+1, 0], pts[i:j+1, 1], linestyle='--', color='lime', linewidth=2.5, zorder=5)
+
+        # draw boundary red lines
+        for bl in boundary_lines:
+            try:
+                s = bl['start']; e = bl['end']
+                ax.plot([s[0], e[0]], [s[1], e[1]], 'r--', linewidth=2.2, zorder=6)
+            except Exception:
+                continue
+
+        # Configure adaptive axis limits so the saved image matches screen coordinates
+        all_x = []
+        all_y = []
+        for trace in traces:
+            if isinstance(trace, np.ndarray):
+                pts = trace
+            else:
+                pts = np.array([[p.x, p.y] for p in trace]) if len(trace) > 0 else np.zeros((0, 2))
+            if pts.shape[0] > 0:
+                all_x.extend(pts[:, 0].tolist())
+                all_y.extend(pts[:, 1].tolist())
+        # include boundary line endpoints
+        for bl in boundary_lines:
+            try:
+                s = bl['start']; e = bl['end']
+                all_x.extend([s[0], e[0]]); all_y.extend([s[1], e[1]])
+            except Exception:
+                pass
+
+        if all_x and all_y:
+            x_min, x_max = min(all_x), max(all_x)
+            y_min, y_max = min(all_y), max(all_y)
+            x_margin = (x_max - x_min) * 0.05 if x_max > x_min else 50
+            y_margin = (y_max - y_min) * 0.05 if y_max > y_min else 50
+            ax.set_xlim(x_min - x_margin, x_max + x_margin)
+            # Invert Y so image matches screen coordinates (y increases downward)
+            ax.set_ylim(y_max + y_margin, y_min - y_margin)
+
+        ax.set_axis_off()
+        plt.tight_layout(pad=0)
+        img = self._fig_to_array(fig)
+        plt.close(fig)
+
+        if save_path:
+            try:
+                cv2.imwrite(save_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+            except Exception as e:
+                print(f"Failed to save simple projection: {e}")
+
+        return img

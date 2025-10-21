@@ -109,7 +109,7 @@ class TrajectoryFeatures:
         # angles
         dy = end_point[1] - start_point[1]
         dx = end_point[0] - start_point[0]
-        angle = np.degrees(np.arctan2(-dy, dx))
+        angle = np.degrees(np.arctan2(dy, dx))
         features['angle'] = angle
 
         # length

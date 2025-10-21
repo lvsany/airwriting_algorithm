@@ -5,9 +5,24 @@ import numpy as np
 from .type import PcaPack
 
 def _mu_sigma_from_ci(low: float, high: float) -> Tuple[float, float]:
+    """
+    Convert a two-sided 95% CI (low, high) into (mu, sigma) assuming normal approx.
+
+    If you want to make the prior wider to reflect greater uncertainty, change
+    the global CI_EXPAND_FACTOR below (e.g. 1.2 or 1.5) which inflates the half-width
+    of the interval before converting to sigma.
+    """
     mu = 0.5 * (low + high)
-    sigma = (high - low) / (2 * 1.96 + 1e-9)
-    return mu, sigma
+    half_width = 0.5 * (high - low)
+    # Apply global expansion factor to the half-width (useful when data is scarce)
+    half_width *= CI_EXPAND_FACTOR
+    # sigma for 95% CI: half_width ≈ 1.96 * sigma  => sigma = half_width / 1.96
+    sigma = half_width / (1.96 + 1e-12)
+    return mu, float(sigma)
+
+# Global factor to inflate the input CI width before converting to (mu,sigma).
+# Set >1.0 to widen the implied prior variance when your underlying statistics are scarce.
+CI_EXPAND_FACTOR = 1.0
 
 # ===== 你的统计先验（由 95% CI 推出 μ,σ） =====
 PRIORS = {
@@ -91,6 +106,6 @@ class ConnectSegmentScorer:
         return float(geom + self.w.w_dens * dens + self.w.w_bdry * self._logit(bdry_conf))
 
     def score_segment(self, metrics, seg_s: np.ndarray, pca: PcaPack, bdry_conf: float) -> float:
-        g = self.score_geom(metrics["straight"], metrics["mean_curv"], metrics["angle_deg"])
+        g = self.score_geom(metrics["straightness"], metrics["mean_curvature"], metrics["angle"])
         d = self.score_density(seg_s, pca)
         return self.fuse(g, d, bdry_conf)
