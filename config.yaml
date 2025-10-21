@@ -1,0 +1,179 @@
+# 空中书写系统配置文件
+# 统一管理项目中的所有常用变量和参数
+
+# ===== 视频和摄像头配置 =====
+video:
+  # 摄像头分辨率设置
+  width: 1280
+  height: 720
+  fps: 60
+  
+# ===== 手部检测配置 =====
+hand_detection:
+  # MediaPipe手部检测参数
+  static_image_mode: false
+  max_num_hands: 1
+  min_detection_confidence: 0.7
+  min_tracking_confidence: 0.5
+  
+  # 手势模式 (1: 食指伸直, 2: 大拇指食指闭合, 3: 拇指食指中指按压, 4: 双指捏合)
+  gesture_mode: 1
+  
+  # 手指检测阈值
+  finger_straightness_threshold: 0.85
+  thumb_index_close_threshold: 0.085
+  thumb_index_middle_press_threshold: 0.1
+  two_finger_pinch_threshold: 0.15
+
+# ===== 轨迹跟踪配置 =====
+trajectory:
+  # 轨迹点限制和阈值
+  max_trajectory_points: 50
+  writing_motion_threshold: 15
+  jitter_threshold: 3
+  
+  # 智能平滑参数
+  smoothing:
+    max_window: 10
+    min_window: 3
+    speed_threshold_low: 100    # 像素/秒
+    speed_threshold_high: 500   # 像素/秒
+    curvature_threshold: 0.5    # 曲率阈值 (0-2)
+
+# ===== 在线轨迹转换器配置 =====
+online_trace:
+  # 速度平滑窗口大小
+  smoothing_window: 5
+
+# ===== 轨迹分割配置 =====
+segmentation:
+  # 阶段一：分割点检测参数（基于统计方法）
+  min_segment_length: 5             # 最小分割段长度（像素）
+  prominence_ratio: 0.2             # 速度突出度比例（prominence = ratio * avg_velocity）
+  curvature_percentile: 75          # 曲率百分位阈值（P75）
+  composite_time_window_ms: 200     # 复合点时间窗口（毫秒）
+  min_segment_duration_ms: 30       # 最小段持续时间（毫秒）
+  min_distance_px: 5.0              # 空间抑制最小距离（像素）
+  smoothing_window: 5               # Savitzky-Golay平滑窗口大小
+  
+  # 阶段三：连笔判定参数（基于标注数据统计置信区间）
+  dash_suppression:
+    # 统计阈值（基于95%置信区间）
+    straightness_min: 0.85          # 连笔最小直线度（置信区间下界 0.861296）
+    curvature_max: 0.02             # 连笔最大曲率（置信区间上界 0.016564）
+    angle_min: -45.0                # 连笔主方向角最小值（置信区间扩展）
+    angle_max: 0.0                  # 连笔主方向角最大值
+    normalized_speed_min: 1.0       # 连笔最小归一化速度（v* = v̄ / median(v̄)）
+    projection_overlap_max: 0.3     # 连笔最大投影重叠度
+    
+    # 置信度分数权重
+    weight_straightness: 0.30       # 直线度权重
+    weight_curvature: 0.20          # 曲率权重
+    weight_speed: 0.20              # 速度权重
+    weight_overlap: 0.30            # 投影重叠权重
+    
+    # 时序一致性参数
+    direction_tolerance_deg: 45.0   # 方向相容性容差（度）
+    speed_ratio_min: 0.8            # 速度比最小值
+    overlap_delta_max: 0.2          # 重叠度增量最大值
+    
+    # 全局正则化参数
+    max_dash_ratio: 0.3             # 最大连笔段比例（30%）
+    min_stroke_similarity: 0.7      # 最小笔划相似度
+
+# ===== 可视化配置 =====
+visualization:
+  # 画布尺寸
+  canvas_sizes:
+    large: [1280, 720]    # 大画布 (轨迹保存)
+    medium: [800, 600]    # 中画布 (分析图)
+  
+  # 绘制参数
+  drawing:
+    thickness:
+      trajectory: 8           # 轨迹线粗细
+      segmented_trajectory: 8 # 分割轨迹线粗细
+      current_trajectory: 10  # 当前轨迹线粗细
+      analysis_trajectory: 3  # 分析图轨迹线粗细
+      overlay_trajectory: 2   # 叠加图轨迹线粗细
+    
+    # 颜色配置 (BGR格式)
+    colors:
+      background: [255, 255, 255]  # 白色背景
+      writing_status: [0, 255, 0]  # 绿色 - 书写状态
+      non_writing_status: [0, 0, 255]  # 红色 - 非书写状态
+    
+    # 标记和填充
+    mark_size: 8              # 标记点大小
+    mark_size_large: 10       # 大标记点大小
+    padding: 30               # 画布边距
+    
+    # 显示选项
+    normalize_to_canvas: true
+    show_split_points: true
+    show_segment_numbers: true
+
+# ===== 功能开关配置 =====
+features:
+  # 主要功能开关
+  enable_text_recognition: false      # 文本识别功能
+  enable_velocity_display: true       # 速度显示功能
+  enable_intra_segmentation: true     # 轨迹内部分割功能
+  enable_auto_visualization: true     # 自动可视化功能
+  enable_auto_analysis: true          # 自动分析功能
+
+# ===== 文本识别配置 =====
+text_recognition:
+  # API配置
+  api_timeout: 30                     # API超时时间(秒)
+  
+  # 图像类型
+  image_types:
+    - "no_smoothing"    # 无平滑处理
+    - "plain"          # 普通处理
+    - "segmented"      # 分割处理
+    - "myself"         # 自定义处理
+
+# ===== 数据存储配置 =====
+storage:
+  # 目录配置
+  directories:
+    data: "data"
+    results: "data/results"
+    analysis_results: "data/analysis_results"
+    test_videos: "data/test_videos"
+    trimmed_videos: "data/trimmed_videos"
+    videos: "data/videos"
+  
+  # 文件命名格式
+  timestamp_format: "%Y%m%d_%H%M%S"
+
+# ===== 分析配置 =====
+analysis:
+  # 统计分析参数
+  curvature_percentile: 90            # 曲率百分位阈值
+  
+  # 结果输出配置
+  save_formats:
+    - "png"           # PNG图像
+    - "txt"           # 文本报告
+    - "csv"           # CSV数据
+
+# ===== 界面配置 =====
+ui:
+  # 文本显示
+  font: "cv2.FONT_HERSHEY_SIMPLEX"
+  font_scale: 1.0
+  font_thickness: 2
+  
+  # 位置配置
+  text_positions:
+    status_x: 20
+    status_y: 50
+    info_x: 20
+    info_y: 90
+    
+  # 窗口配置
+  window_names:
+    main: "Air Writing"
+    analysis: "速度极小值分析"
