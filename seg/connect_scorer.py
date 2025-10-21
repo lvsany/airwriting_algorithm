@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from typing import Dict, Tuple
 import numpy as np
-from .types import PcaPack
+from .type import PcaPack
 
 def _mu_sigma_from_ci(low: float, high: float) -> Tuple[float, float]:
     mu = 0.5 * (low + high)

@@ -1,3 +1,4 @@
+from typing import List
 import cv2
 import numpy as np
 import sys
@@ -6,6 +7,11 @@ import glob
 from pathlib import Path
 
 from seg.trajectory_features import TrajectoryFeatures
+
+from seg.connect_scorer import ConnectSegmentScorer
+
+from seg.detector import ConnectStrokeDetector
+import matplotlib.pyplot as plt
 
 
 # 添加父目录到路径以便导入模块
@@ -150,25 +156,100 @@ def process_single_video(video_path: str, output_dir: str, projection_visualizer
     
     # 生成输出文件名
     output_path = os.path.join(output_dir, f"{video_name}_projection.png")
-
     # 使用velocity_visualizer生成投影字符阴影图（使用均匀采样）
     try:
         # 设置采样间隔为10像素，每隔10像素采样一个轨迹点
         sample_interval = 0.0001  # 像素
-        projection_img = projection_visualizer.generate_trajectory_projection(
+        proj_img, boundary_lines = projection_visualizer.generate_trajectory_projection(
             completed_traces,
             canvas_size=LARGE_CANVAS,
             save_path=output_path,
             sample_interval=sample_interval
         )
         print(f"✓ 投影图已保存: {output_path} (采样间隔={sample_interval}px)")
+
+        trace_rs, trace_s = [], []
+
+        for t in completed_traces:
+            tf = TrajectoryFeatures(trajectory=t, xy=None)
+            rs = tf.resample_by_arclength(ds=sample_interval)
+            trace_rs.append(rs)
+            rs = tf.smooth_savgol(window_size=11, polyorder=3)
+            trace_s.append(rs)
+        pca_pack = projection_visualizer.get_last_pcapack()
+
+        scorer = ConnectSegmentScorer()
+        detector = ConnectStrokeDetector(scorer=scorer)
+
+        all_conn_segs = []
+        for tid, xy in enumerate(trace_s):
+            segs = detector.detect(xy, pca_pack, boundary_lines)
+            # attach originating trace index so visualization can draw correctly
+            for s in segs:
+                try:
+                    setattr(s, '_trace_idx', tid)
+                except Exception:
+                    pass
+                all_conn_segs.append(s)
+
+        print(f"✓ 共生成 {len(all_conn_segs)} 个连笔候选段")
+
+        for k, s in enumerate(all_conn_segs[:10], 1):
+            # s may store metrics under different attribute names (metrics vs geom)
+            m = getattr(s, 'metrics', None) or getattr(s, 'geom', None) or {}
+            straight = m.get('straight', m.get('straightness', float('nan')))
+            mean_curv = m.get('mean_curv', m.get('mean_curvature', float('nan')))
+            angle_deg = m.get('angle_deg', m.get('angle', float('nan')))
+            print(f"  #{k}: idx=[{s.i},{s.j}] score={s.score:.3f} "
+                f"straight={straight:.3f} curv={mean_curv:.4f} angle={angle_deg:.1f}")
+
+        # ===== 可视化：在投影图上叠加连笔段（虚线） =====
+        try:
+            fig, ax = plt.subplots(figsize=(12, 8))
+            # 显示投影图（归一化为0-1以保持一致性）
+            img = proj_img.astype(np.float32)
+            if img.max() > 1.0:
+                img = img / 255.0
+            ax.imshow(img)
+
+            # 绘制原始（平滑后、重采样后）轨迹点
+            colors = plt.cm.tab10(np.linspace(0, 1, max(len(trace_s), 1)))
+            for ti, trace_xy in enumerate(trace_s):
+                if len(trace_xy) < 2:
+                    continue
+                xs = [int(p[0]) for p in trace_xy]
+                ys = [int(p[1]) for p in trace_xy]
+                ax.plot(xs, ys, color=colors[ti], linewidth=2.0, alpha=0.8)
+
+            # 叠加连笔段为虚线（使用段的端点在原图坐标系中）
+            for seg in all_conn_segs:
+                # Use attached originating trace index if available
+                tid = getattr(seg, '_trace_idx', None)
+                if tid is None or tid < 0 or tid >= len(trace_s):
+                    continue
+                trace_xy = trace_s[tid]
+                if seg.i < 0 or seg.j >= len(trace_xy) or seg.i >= len(trace_xy):
+                    continue
+                x0, y0 = trace_xy[seg.i]
+                x1, y1 = trace_xy[seg.j]
+                ax.plot([x0, x1], [y0, y1], linestyle='--', color='lime', linewidth=3, alpha=0.9)
+
+            ax.axis('off')
+            overlay_path = os.path.join(output_dir, f"{video_name}_segments_overlay.png")
+            plt.savefig(overlay_path, bbox_inches='tight', pad_inches=0)
+            plt.close(fig)
+            print(f"✓ 已保存连笔段叠加图: {overlay_path}")
+        except Exception as e:
+            print(f"⚠ 无法生成连笔段叠加图: {e}")
+
+
         return True
     except Exception as e:
         print(f"✗ 生成投影图失败: {e}")
         import traceback
         traceback.print_exc()
         return False
-
+    
 
 def batch_process_videos():
     """
