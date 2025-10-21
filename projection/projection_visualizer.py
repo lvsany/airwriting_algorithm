@@ -8,18 +8,7 @@ from scipy.interpolate import griddata
 from scipy.ndimage import gaussian_filter
 import seaborn as sns
 from utils.online_trace_converter import TracePoint
-
-@dataclass
-class PcaPack:
-    origin: np.ndarray        # PCA 坐标原点（全体点的质心）
-    pc1_axis: np.ndarray      # 主轴PC1的单位方向向量（画黑虚线那条方向）
-    pc1_normal: np.ndarray    # 与PC1垂直的单位法向（红色分界线的法向）
-    proj_s: np.ndarray        # 所有采样点的PC1标量坐标（把2D投影到1D得到的 s）
-    density_bins: np.ndarray  # 密度直方图的bin中心（s 轴）
-    density_hist: np.ndarray  # 各bin计数（或平滑后的密度）
-    redlines_s: np.ndarray    # 字符分界线在 PC1 上的标量位置（若有）
-    # 便捷变换（函数或小工具）————可选
-    # to_pc1(xy)->s, from_pc1(s,t)->xy 等
+from seg.type import PcaPack
 
 
 
@@ -630,13 +619,12 @@ class ProjectionVisualizer:
         plt.close(fig)
 
         self._last_pcapack = PcaPack(
-            origin=center_point,
+            mean=center_point,
             pc1_axis=principal_direction,
             pc1_normal=perpendicular,
-            proj_s=np.array(projection_positions),
             density_bins=bin_centers if projection_positions else np.array([]),
-            density_hist=display_counts if projection_positions else np.array([]),
-            redlines_s=np.array([ ( (line['start'][0] - center_point[0]) * principal_direction[0] +
+            density_profile=display_counts if projection_positions else np.array([]),
+            red_lines=np.array([ ( (line['start'][0] - center_point[0]) * principal_direction[0] +
                                      (line['start'][1] - center_point[1]) * principal_direction[1] )
                                   for line in boundary_lines ]) if projection_positions else np.array([])
         )

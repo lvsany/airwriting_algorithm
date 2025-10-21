@@ -4,9 +4,10 @@ import cv2
 import numpy as np
 
 from utils.online_trace_converter import TracePoint
+from .type import PcaPack
 
 class TrajectoryFeatures:
-    def __init__(self, trajectory: list[TracePoint],xy: np.ndarray):
+    def __init__(self, trajectory: list[TracePoint],xy: np.ndarray, pca: PcaPack = None):
         """
         初始化轨迹特征计算类
         
@@ -18,6 +19,8 @@ class TrajectoryFeatures:
             self.xy = self.trace_to_array()
         else:
             self.xy = xy
+
+        self.pca = pca
 
     def trace_to_array(self) -> np.ndarray:
         """
@@ -107,10 +110,38 @@ class TrajectoryFeatures:
         features['mean_curvature'] = float(np.mean(dtheta / segL)) if len(segL) else 0.0
 
         # angles
-        dy = end_point[1] - start_point[1]
-        dx = end_point[0] - start_point[0]
-        angle = np.degrees(np.arctan2(dy, dx))
-        features['angle'] = angle
+        # angles: compute signed angle between the segment vector and the PCA pc1 axis
+        seg_vec = end_point - start_point
+        # default: angle relative to x-axis
+        angle_deg = 0.0
+        try:
+            if self.pca is not None and hasattr(self.pca, 'pc1_axis') and self.pca.pc1_axis is not None:
+                v = np.asarray(self.pca.pc1_axis, dtype=float)
+                u = np.asarray(seg_vec, dtype=float)
+                nu = np.linalg.norm(u)
+                nv = np.linalg.norm(v)
+                if nu > 1e-9 and nv > 1e-9:
+                    u_unit = u / nu
+                    v_unit = v / nv
+                    # signed angle: atan2(det(v,u), dot(v,u)) where det = v.x*u.y - v.y*u.x
+                    det = v_unit[0] * u_unit[1] - v_unit[1] * u_unit[0]
+                    dot = float(np.dot(v_unit, u_unit))
+                    angle_deg = float(np.degrees(np.arctan2(det, dot)))
+                else:
+                    angle_deg = 0.0
+            else:
+                dy = seg_vec[1]
+                dx = seg_vec[0]
+                angle_deg = float(np.degrees(np.arctan2(dy, dx)))
+        except Exception:
+            # fallback to x-axis based angle on any error
+            dy = seg_vec[1]
+            dx = seg_vec[0]
+            angle_deg = float(np.degrees(np.arctan2(dy, dx)))
+
+        # store angle (degrees) and keep backward-compatible key
+        # features['angle_deg'] = angle_deg
+        features['angle'] = angle_deg
 
         # length
         features['length'] = path_length
