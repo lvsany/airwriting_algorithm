@@ -5,6 +5,9 @@ import os
 import glob
 from pathlib import Path
 
+from seg.trajectory_features import TrajectoryFeatures
+
+
 # 添加父目录到路径以便导入模块
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -147,7 +150,7 @@ def process_single_video(video_path: str, output_dir: str, projection_visualizer
     
     # 生成输出文件名
     output_path = os.path.join(output_dir, f"{video_name}_projection.png")
-    
+
     # 使用velocity_visualizer生成投影字符阴影图（使用均匀采样）
     try:
         # 设置采样间隔为10像素，每隔10像素采样一个轨迹点
