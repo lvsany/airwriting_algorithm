@@ -157,7 +157,21 @@ def process_single_video(video_path: str, output_dir: str, projection_visualizer
     output_path = os.path.join(output_dir, f"projection/{video_name}.png")
     # 使用velocity_visualizer生成投影字符阴影图（使用均匀采样）
     try:
-        # 设置采样间隔为10像素，每隔10像素采样一个轨迹点
+        original_out = os.path.join(output_dir, f"original/{video_name}.png")
+        try:
+            projection_visualizer.simple_projection_with_conn_segs(
+                traces=completed_traces,
+                boundary_lines=[],
+                conn_segs_by_trace=None,
+                canvas_size=LARGE_CANVAS,
+                save_path=original_out
+            )
+            print(f"✓ 原始轨迹图已保存: {original_out}")
+        except Exception as e:
+            print(f"✗ 原始轨迹图保存失败: {e}")
+
+
+
         sample_interval = 0.0001  # 像素
         _, boundary_lines = projection_visualizer.generate_trajectory_projection(
             completed_traces,
