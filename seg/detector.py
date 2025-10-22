@@ -89,68 +89,144 @@ class ConnectStrokeDetector:
             return (line_indices[-1], -1)
         else:
             return (line_indices[idx - 1], line_indices[idx + 1])
+    # def grow_multiscale(self, xy: np.ndarray, seed_idx: int, line_id: int, pca: PcaPack, boundary_lines: List[dict]) -> List[ConnSeg]:
+    #     """
+    #     以 seed 为中心，双向多尺度生成候选段；对每个候选段：
+    #     - 算几何指标（直线度/曲率/角度/长度）
+    #     得到 score。另记录所属“gap”（相邻红线对）。
+    #     """
+    #     conn_segs = []
+    #     n_points = xy.shape[0]
+    #     scales = [3,6,9,12,15,18,21,24,27,30,33,36,39]  # 多尺度长度（点数）
+        
+    #     for scale in scales:
+    #         for direction in [-1, 1]:  # 向前和向后生长
+    #             if direction == -1:
+    #                 start_idx = max(0, seed_idx - scale)
+    #                 end_idx = seed_idx
+    #             else:
+    #                 start_idx = seed_idx
+    #                 end_idx = min(n_points - 1, seed_idx + scale)
+                
+    #             if end_idx - start_idx < 2:
+    #                 continue  # 段太短，跳过
+                
+    #             seg_points = xy[start_idx:end_idx+1]
+                
+    #             trajectory_features = TrajectoryFeatures(trajectory=None, xy=seg_points, pca=pca)
+    #             # 计算几何指标
+    #             geom_metrics = trajectory_features.calculate_features()
+
+    #             if not self._segment_ok(geom_metrics):
+    #                 continue  # 不满足硬约束，跳过
+    #             # 计算综合得分（使用数值稳定的 sigmoid 避免 math.exp 溢出）
+    #             raw_score = float(self.scorer.score_segment(
+    #                 metrics=geom_metrics,
+    #                 seg_s=seg_points,
+    #                 pca=pca
+    #             ))
+
+    #             # 调试输出：当 raw_score 非常大或非常小时打印详细信息，帮助定位为何 sigmoid 饱和
+    #             try:
+    #                 if abs(raw_score) > 5.0:  # 阈值可调
+    #                     # 从 scorer 中单独计算几项以便定位（如果 scorer 有相应方法）
+    #                     # 这里尽量打印可用信息：raw_score 与 geom 指标
+    #                     print(f"[DEBUG SCORE] idx=[{start_idx},{end_idx}] raw_score={raw_score:.3f} straight={geom_metrics.get('straightness'):.3f} mean_curv={geom_metrics.get('mean_curvature'):.4f} angle={geom_metrics.get('angle'):.2f}")
+    #             except Exception:
+    #                 pass
+
+    #             # 温度缩放和裁剪：先缩放再裁剪到 [-score_clip, score_clip]
+    #             scaled_score = raw_score * self.score_temp
+    #             # clip
+    #             if scaled_score > self.score_clip:
+    #                 scaled_score = self.score_clip
+    #             elif scaled_score < -self.score_clip:
+    #                 scaled_score = -self.score_clip
+
+    #             # 调试打印 scaled 值以便观察
+    #             try:
+    #                 if abs(raw_score) > 5.0:
+    #                     print(f"[DEBUG SCORE] scaled={scaled_score:.3f}")
+    #             except Exception:
+    #                 pass
+
+    #             # 数值稳定的 sigmoid：对正负分支分别处理，避免对非常大/小的 x 计算 exp(大数)
+    #             def _stable_sigmoid(x: float) -> float:
+    #                 if x >= 0.0:
+    #                     z = math.exp(-x)
+    #                     return 1.0 / (1.0 + z)
+    #                 else:
+    #                     z = math.exp(x)
+    #                     return z / (1.0 + z)
+
+    #             score = _stable_sigmoid(scaled_score)
+
+    #             # 获取所属gap_id
+    #             gap_id = self.get_gap_id(line_id, boundary_lines)
+
+                
+    #             conn_seg = ConnSeg(
+    #                 i=start_idx,
+    #                 j=end_idx,
+    #                 score=score,
+    #                 geom=geom_metrics,
+    #                 gap_id=gap_id
+    #             )
+                
+    #             conn_segs.append(conn_seg)
+        
+    #     return conn_segs
+    
     def grow_multiscale(self, xy: np.ndarray, seed_idx: int, line_id: int, pca: PcaPack, boundary_lines: List[dict]) -> List[ConnSeg]:
         """
         以 seed 为中心，双向多尺度生成候选段；对每个候选段：
-        - 算几何指标（直线度/曲率/角度/长度）
+        - 向左右两侧分别扩展，并计算整个段的分数。
         得到 score。另记录所属“gap”（相邻红线对）。
         """
         conn_segs = []
         n_points = xy.shape[0]
-        scales = [3,6,9,12,15,18,21,24,27,30,33,36,39]  # 多尺度长度（点数）
-        
-        for scale in scales:
-            for direction in [-1, 1]:  # 向前和向后生长
-                if direction == -1:
-                    start_idx = max(0, seed_idx - scale)
-                    end_idx = seed_idx
-                else:
-                    start_idx = seed_idx
-                    end_idx = min(n_points - 1, seed_idx + scale)
-                
-                if end_idx - start_idx < 2:
+
+        # 设定不同尺度的增长范围（可以是不同的尺度）
+        left_scales = [3, 6, 9, 12, 15, 18]  # 左侧的增长尺度
+        right_scales = [3, 6, 9, 12, 15, 18]  # 右侧的增长尺度
+
+        for left_scale in left_scales:
+            for right_scale in right_scales:
+                # 向左扩展
+                start_idx_left = max(0, seed_idx - left_scale)
+                # 向右扩展
+                end_idx_right = min(n_points - 1, seed_idx + right_scale)
+
+                # 确保段长度足够，避免生成无效段
+                if end_idx_right - start_idx_left < 2:
                     continue  # 段太短，跳过
-                
-                seg_points = xy[start_idx:end_idx+1]
-                
+
+                # 提取当前段的所有点（左右两边一起）
+                seg_points = xy[start_idx_left:end_idx_right+1]
+
+                # 计算该段的几何指标
                 trajectory_features = TrajectoryFeatures(trajectory=None, xy=seg_points, pca=pca)
-                # 计算几何指标
                 geom_metrics = trajectory_features.calculate_features()
 
+                # 如果该段不满足硬约束，则跳过
                 if not self._segment_ok(geom_metrics):
-                    continue  # 不满足硬约束，跳过
-                # 计算综合得分（使用数值稳定的 sigmoid 避免 math.exp 溢出）
+                    continue
+
+                # 计算整个段的分数
                 raw_score = float(self.scorer.score_segment(
                     metrics=geom_metrics,
                     seg_s=seg_points,
                     pca=pca
                 ))
 
-                # 调试输出：当 raw_score 非常大或非常小时打印详细信息，帮助定位为何 sigmoid 饱和
-                try:
-                    if abs(raw_score) > 5.0:  # 阈值可调
-                        # 从 scorer 中单独计算几项以便定位（如果 scorer 有相应方法）
-                        # 这里尽量打印可用信息：raw_score 与 geom 指标
-                        print(f"[DEBUG SCORE] idx=[{start_idx},{end_idx}] raw_score={raw_score:.3f} straight={geom_metrics.get('straightness'):.3f} mean_curv={geom_metrics.get('mean_curvature'):.4f} angle={geom_metrics.get('angle'):.2f}")
-                except Exception:
-                    pass
-
-                # 温度缩放和裁剪：先缩放再裁剪到 [-score_clip, score_clip]
+                # 温度缩放和裁剪：避免 sigmoid 饱和
                 scaled_score = raw_score * self.score_temp
-                # clip
                 if scaled_score > self.score_clip:
                     scaled_score = self.score_clip
                 elif scaled_score < -self.score_clip:
                     scaled_score = -self.score_clip
 
-                # 调试打印 scaled 值以便观察
-                try:
-                    if abs(raw_score) > 5.0:
-                        print(f"[DEBUG SCORE] scaled={scaled_score:.3f}")
-                except Exception:
-                    pass
-
-                # 数值稳定的 sigmoid：对正负分支分别处理，避免对非常大/小的 x 计算 exp(大数)
+                # 数值稳定的 sigmoid 函数
                 def _stable_sigmoid(x: float) -> float:
                     if x >= 0.0:
                         z = math.exp(-x)
@@ -161,21 +237,23 @@ class ConnectStrokeDetector:
 
                 score = _stable_sigmoid(scaled_score)
 
-                # 获取所属gap_id
+                # 获取所属的 gap_id（相邻红线对）
                 gap_id = self.get_gap_id(line_id, boundary_lines)
 
-                
+                # 创建一个 ConnSeg 对象，记录该段信息
                 conn_seg = ConnSeg(
-                    i=start_idx,
-                    j=end_idx,
+                    i=start_idx_left,
+                    j=end_idx_right,
                     score=score,
                     geom=geom_metrics,
                     gap_id=gap_id
                 )
-                
+
+                # 添加该候选段
                 conn_segs.append(conn_seg)
-        
+
         return conn_segs
+
     @staticmethod
     def _iou_1d(a: Tuple[int,int], b: Tuple[int,int]) -> float:
         inter = max(0, min(a[1], b[1]) - max(a[0], b[0]))
