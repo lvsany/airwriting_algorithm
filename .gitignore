@@ -1,0 +1,37 @@
+# Ignore data sets and results
+# Adjust these patterns to match where you store large datasets or outputs
+data/
+data/*
+*/data/
+*/data/*
+
+# Results / output folders
+results/
+
+# Cache, virtualenv, python artifacts
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+venv/
+env/
+ENV/
+.venv/
+
+# Byte-compiled / distribution
+build/
+dist/
+
+# Jupyter
+.ipynb_checkpoints
+
+# OS files
+.DS_Store
+
+# Editor directories
+.vscode/
+.idea/
+
+# Temporary files
+*.log
+*.tmp

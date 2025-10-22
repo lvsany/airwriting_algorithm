@@ -14,13 +14,25 @@ class ConnSeg:
 class ConnectStrokeDetector:
     def __init__(self, scorer: ConnectSegmentScorer, score_thr: float=0.3, 
                  angle_max_deg: float=15, len_min_px: float=10.0,
-                 score_tie_eps: float=0.05):
+                 score_tie_eps: float=0.05,
+                 straight_tie_eps: float=0.01,
+                 prefer_longer_on_tie: bool=True,
+                 score_temp: float=1.0,
+                 score_clip: float=10.0):
         self.scorer = scorer
         self.score_thr = score_thr
         self.angle_max_deg = angle_max_deg
         self.len_min_px = len_min_px
         # 当两个候选分数差距小于该阈值时，使用直线度作为决胜（越大优先）
         self.score_tie_eps = score_tie_eps
+        # 当直线度也非常接近（差距小于该阈值）时，再以段长度做二次决胜（更长优先）
+        self.straight_tie_eps = straight_tie_eps
+        self.prefer_longer_on_tie = prefer_longer_on_tie
+        # 温度缩放和裁剪：用于在 sigmoid 前控制 raw_score 幅度，避免饱和
+        # score_temp < 1.0 可以把原始分数拉小以减缓 sigmoid 饱和；
+        # score_clip 用于在缩放后裁剪到 [-score_clip, score_clip]
+        self.score_temp = float(score_temp)
+        self.score_clip = float(score_clip)
 
     # 点到直线的有向距离
     def _point_to_line_distance(self, point: np.ndarray, line_start: np.ndarray, line_end: np.ndarray) -> float:
@@ -123,6 +135,21 @@ class ConnectStrokeDetector:
                 except Exception:
                     pass
 
+                # 温度缩放和裁剪：先缩放再裁剪到 [-score_clip, score_clip]
+                scaled_score = raw_score * self.score_temp
+                # clip
+                if scaled_score > self.score_clip:
+                    scaled_score = self.score_clip
+                elif scaled_score < -self.score_clip:
+                    scaled_score = -self.score_clip
+
+                # 调试打印 scaled 值以便观察
+                try:
+                    if abs(raw_score) > 5.0:
+                        print(f"[DEBUG SCORE] scaled={scaled_score:.3f}")
+                except Exception:
+                    pass
+
                 # 数值稳定的 sigmoid：对正负分支分别处理，避免对非常大/小的 x 计算 exp(大数)
                 def _stable_sigmoid(x: float) -> float:
                     if x >= 0.0:
@@ -132,7 +159,7 @@ class ConnectStrokeDetector:
                         z = math.exp(x)
                         return z / (1.0 + z)
 
-                score = _stable_sigmoid(raw_score)
+                score = _stable_sigmoid(scaled_score)
 
                 # 获取所属gap_id
                 gap_id = self.get_gap_id(line_id, boundary_lines)
@@ -210,17 +237,28 @@ class ConnectStrokeDetector:
                 # 遍历当前保留的候选（复制一份以便可能替换）
                 for k in keep[:]:
                     if self._iou_1d((c.i,c.j), (k.i,k.j)) > 0.5:
-                        # 若分数接近（平局），以直线度较大的为优
+                        # 若分数接近（平局），以长度较长的为优
                         try:
                             score_diff = c.score - k.score
                             if abs(score_diff) <= self.score_tie_eps:
-                                c_straight = float(c.geom.get('straightness', 0.0) or 0.0)
-                                k_straight = float(k.geom.get('straightness', 0.0) or 0.0)
-                                if c_straight > k_straight:
-                                    # 替换掉已有的 k，允许继续检查是否与其他 kept 重叠
+                                c_len = (c.j - c.i)
+                                k_len = (k.j - k.i)
+                                if c_len > k_len:
                                     keep.remove(k)
-                                    # 不将 ok 设为 False，这样最后会把 c 加入
                                     continue
+                                
+                                elif abs(straight_diff) <= self.straight_tie_eps and self.prefer_longer_on_tie:
+                                    # 长度也非常接近，作为二次决胜以更直为准
+                                    c_straight = float(c.geom.get('straightness', 0.0) or 0.0)
+                                    k_straight = float(k.geom.get('straightness', 0.0) or 0.0)
+                                    straight_diff = c_straight - k_straight
+                                    if straight_diff > 0.0:
+                                        # c 更直，替换 k
+                                        keep.remove(k)
+                                        continue
+                                    else:
+                                        ok = False
+                                        break
                                 else:
                                     ok = False
                                     break

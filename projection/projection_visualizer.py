@@ -681,7 +681,7 @@ class ProjectionVisualizer:
                     i, j = int(seg.i), int(seg.j)
                     if i < 0 or j >= pts.shape[0] or i >= j:
                         continue
-                    ax.plot(pts[i:j+1, 0], pts[i:j+1, 1], linestyle='--', color='lime', linewidth=2.5, zorder=5)
+                    ax.plot(pts[i:j+1, 0], pts[i:j+1, 1], linestyle='--', color='white', linewidth=2.5, zorder=5)
 
         # draw boundary red lines
         for bl in boundary_lines:

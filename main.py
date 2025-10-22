@@ -178,7 +178,7 @@ def process_single_video(video_path: str, output_dir: str, projection_visualizer
         pca_pack = projection_visualizer.get_last_pcapack()
 
         scorer = ConnectSegmentScorer()
-        detector = ConnectStrokeDetector(scorer=scorer)
+        detector = ConnectStrokeDetector(scorer=scorer, score_tie_eps=0.07)
 
         all_conn_segs = []
         # detect per-trace and keep mapping for visualization
