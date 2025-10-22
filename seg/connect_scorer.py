@@ -53,8 +53,8 @@ PRIORS = {
 
 @dataclass
 class Weights:
-    w_s: float = 0.40   # 直线度
-    w_k: float = 0.35   # 曲率
+    w_s: float = 0.45   # 直线度
+    w_k: float = 0.3   # 曲率
     w_a: float = 0.25   # 角度
     w_dens: float = 0.25  # 密度项（鼓励连笔位于密度谷）
     w_bdry: float = 0.20  # 边界可靠度

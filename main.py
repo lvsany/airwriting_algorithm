@@ -154,7 +154,7 @@ def process_single_video(video_path: str, output_dir: str, projection_visualizer
     print(f"✓ 检测到 {len(completed_traces)} 条轨迹, {sum(len(t) for t in completed_traces)} 个轨迹点")
     
     # 生成输出文件名
-    output_path = os.path.join(output_dir, f"{video_name}_projection.png")
+    output_path = os.path.join(output_dir, f"projection/{video_name}.png")
     # 使用velocity_visualizer生成投影字符阴影图（使用均匀采样）
     try:
         # 设置采样间隔为10像素，每隔10像素采样一个轨迹点
@@ -196,7 +196,7 @@ def process_single_video(video_path: str, output_dir: str, projection_visualizer
                 f"straight={m['straightness']:.3f} curv={m['mean_curvature']:.4f} angle={m['angle']:.1f}")
         # --- Simple visualization: draw traces with red boundary lines and dashed conn segments ---
         try:
-            simple_out = os.path.join(output_dir, f"{video_name}_simple_projection.png")
+            simple_out = os.path.join(output_dir, f"clean/{video_name}.png")
             img = projection_visualizer.simple_projection_with_conn_segs(
                 traces=completed_traces,
                 boundary_lines=boundary_lines,
@@ -228,6 +228,9 @@ def batch_process_videos():
     
     # 输出目录
     output_dir = os.path.join(script_dir, "results")
+    os.makedirs(os.path.join(output_dir, "projection"), exist_ok=True)
+    os.makedirs(os.path.join(output_dir, "clean"), exist_ok=True)
+    
     os.makedirs(output_dir, exist_ok=True)
     
     # 获取所有视频文件
@@ -237,9 +240,6 @@ def batch_process_videos():
         print(f"错误：在 {video_dir} 目录下没有找到视频文件")
         return
     
-    print(f"找到 {len(video_files)} 个视频文件")
-    print(f"输出目录: {output_dir}")
-    print("=" * 60)
     
     # 初始化投影可视化器（共享实例）
     projection_visualizer = ProjectionVisualizer(figsize=(15, 10))
