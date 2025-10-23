@@ -65,7 +65,7 @@ def run_one_capture(cap: cv2.VideoCapture, out_path: Path, duration: float, prev
     ensure_dir(out_path)
 
     code = make_code()
-    filename = f"zwj_{code}.mp4"
+    filename = f"cly_{code}.mp4"
     filepath = unique_filename(out_path / filename)
 
     # Try to read a frame to get dimensions
