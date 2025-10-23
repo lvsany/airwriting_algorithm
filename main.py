@@ -242,7 +242,7 @@ def batch_process_videos():
     
     # 输出目录
     output_dir = os.path.join(script_dir, "results")
-    os.makedirs(os.path.join(output_dir, "projection"), exist_ok=True)
+    os.makedirs(os.path.join(output_dir, "original"), exist_ok=True)
     os.makedirs(os.path.join(output_dir, "clean"), exist_ok=True)
     
     os.makedirs(output_dir, exist_ok=True)
