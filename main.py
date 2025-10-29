@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 import cv2
 import numpy as np
 import sys
@@ -19,6 +19,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from hand_track.finger_tracking import HandWritingDetector, smart_smooth
 from utils.online_trace_converter import OnlineTraceConverter
 from projection.projection_visualizer import ProjectionVisualizer
+from projection.velocity_visualizer import VelocityVisualizer
 import yaml
 
 # 加载配置文件】
@@ -31,7 +32,8 @@ VIDEO_DIR = "data/test_videos"  # 视频目录
 # 画布配置
 LARGE_CANVAS = tuple(CONFIG['visualization']['canvas_sizes']['large'])
 
-def process_single_video(video_path: str, output_dir: str, projection_visualizer: ProjectionVisualizer) -> bool:
+def process_single_video(video_path: str, output_dir: str, projection_visualizer: ProjectionVisualizer,
+                         velocity_visualizer: Optional[VelocityVisualizer] = None) -> bool:
     """
     处理单个视频：获取轨迹 -> 平滑 -> 基于投影密度绘制字符阴影图
     
@@ -170,8 +172,6 @@ def process_single_video(video_path: str, output_dir: str, projection_visualizer
         except Exception as e:
             print(f"✗ 原始轨迹图保存失败: {e}")
 
-
-
         sample_interval = 0.0001  # 像素
         _, boundary_lines = projection_visualizer.generate_trajectory_projection(
             completed_traces,
@@ -222,6 +222,21 @@ def process_single_video(video_path: str, output_dir: str, projection_visualizer
         except Exception as e:
             print(f"✗ 简洁投影图保存失败: {e}")
 
+        # --- 生成速度轨迹映射图（如果提供了velocity_visualizer） ---
+        try:
+            if velocity_visualizer is not None:
+                vel_dir = os.path.join(output_dir, "velocity")
+                os.makedirs(vel_dir, exist_ok=True)
+                vel_out = os.path.join(vel_dir, f"{video_name}.png")
+                velocity_visualizer.generate_trajectory_velocity_map(
+                    traces=completed_traces,
+                    canvas_size=LARGE_CANVAS,
+                    save_path=vel_out
+                )
+                print(f"✓ 速度轨迹映射图已保存: {vel_out}")
+        except Exception as e:
+            print(f"✗ 速度轨迹映射图生成失败: {e}")
+
         return True
     except Exception as e:
         print(f"✗ 生成投影图失败: {e}")
@@ -257,6 +272,9 @@ def batch_process_videos():
     
     # 初始化投影可视化器（共享实例）
     projection_visualizer = ProjectionVisualizer(figsize=(15, 10))
+    # 初始化速度可视化器（共享实例）
+    velocity_visualizer = VelocityVisualizer(figsize=(12, 8))
+    os.makedirs(os.path.join(output_dir, "velocity"), exist_ok=True)
 
     # 统计信息
     success_count = 0
@@ -267,7 +285,7 @@ def batch_process_videos():
         print(f"\n[{idx}/{len(video_files)}] 处理视频...")
         
         try:
-            success = process_single_video(video_path, output_dir, projection_visualizer)
+            success = process_single_video(video_path, output_dir, projection_visualizer, velocity_visualizer)
             if success:
                 success_count += 1
             else:

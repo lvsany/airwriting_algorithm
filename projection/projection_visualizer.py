@@ -4,6 +4,7 @@ import matplotlib.patches as patches
 import numpy as np
 import cv2
 from typing import List, Tuple, Optional, Dict
+from pathlib import Path
 from scipy.interpolate import griddata
 from scipy.ndimage import gaussian_filter
 import seaborn as sns
@@ -611,6 +612,12 @@ class ProjectionVisualizer:
         plt.tight_layout()
         
         if save_path:
+            # Ensure parent directory exists to avoid FileNotFoundError
+            try:
+                Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
+
             plt.savefig(save_path, dpi=300, bbox_inches='tight', 
                        facecolor='white', edgecolor='none')
             print(f"Trajectory projection analysis saved: {save_path}")
@@ -630,7 +637,10 @@ class ProjectionVisualizer:
         )
         
         # 返回图像数组和分界线信息
-        return img_array, boundary_lines if projection_positions else (img_array, [])
+        if projection_positions:
+            return img_array, boundary_lines
+        else:
+            return img_array, []
     
     def get_last_pcapack(self) -> Optional[PcaPack]:
         """
@@ -726,6 +736,11 @@ class ProjectionVisualizer:
 
         if save_path:
             try:
+                # Ensure parent directory exists to avoid write failure
+                try:
+                    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+                except Exception:
+                    pass
                 cv2.imwrite(save_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
             except Exception as e:
                 print(f"Failed to save simple projection: {e}")

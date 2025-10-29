@@ -1,46 +1,168 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-Simple data collection helper.
+In-air handwriting data collection for mobile/emergency annotation scenarios.
 
-Opens the default camera, shows a random 4-digit code in the preview window,
-waits a short preview period (default 2s) and then records for a fixed duration
-(default 5s). The recorded video is saved to the output directory with the
-filename equal to the 4-digit code (e.g. "0123.mp4").
+Updates:
+- Stimulus text is shown on screen but NOT saved into the video file.
+- During recording, we write the CLEAN raw frame (no stimulus, no labels, no trajectory).
+- Window overlays (stimulus, countdown, block/mode) remain for guidance.
+- Filename = safe(stimulus text). CSV log preserved. All on-screen prompts in ENGLISH.
 
-Usage examples:
-  python extern/data_collect.py
-  python extern/data_collect.py --duration 5 --preview 1 --out data/test_videos
-
-Requirements:
-  - OpenCV (cv2).
-
-This file was added to provide a reproducible data capture tool for
-labelling short video clips by a displayed code.
+Blocks (set BLOCK=1..4):
+1) No time pressure (15s) + Continuous pinch (no release)
+2) Time pressure (7s)     + Continuous pinch (no release)
+3) No time pressure (15s) + Pinch with releases (paper-like)
+4) Time pressure (7s)     + Pinch with releases (paper-like)
 """
-import argparse
-import math
+
 import os
-import random
+import sys
+import math
 import time
+import random
+import csv
+import re
+import unicodedata
 from pathlib import Path
+from typing import List, Tuple
 
 import cv2
 
+# =========================
+# ===== Global Config =====
+# =========================
+BLOCK = 1                 # 1..4
+CAMERA_INDEX = 1
+OUT_DIR       = "data/test_videos"
+FPS           = 60.0
+CODEC         = "mp4v"
+PREVIEW_SEC   = 2.0
+COUNTDOWN_SEC = 3
+WINDOW_NAME   = "data_collect"
 
-def make_code() -> str:
-    return f"{random.randint(0, 9999):04d}"
+# Optional external phrase list (one per line, 2–5 words)
+PHRASES_FILE  = "extern/phrases_emergency_en.txt"
+# =========================
 
 
+def _block_cfg(block_id: int) -> Tuple[float, str, str]:
+    if block_id == 1:
+        return 15.0, "No time pressure (15s)", "Continuous pinch (no release)"
+    if block_id == 2:
+        return 7.0,  "Time pressure (7s)",     "Continuous pinch (no release)"
+    if block_id == 3:
+        return 15.0, "No time pressure (15s)", "Pinch with releases (paper-like)"
+    if block_id == 4:
+        return 7.0,  "Time pressure (7s)",     "Pinch with releases (paper-like)"
+    return 15.0, "No time pressure (15s)", "Continuous pinch (no release)"
+
+
+# ===== Emergency/mobile English phrases (2–5 words) =====
+_BUILTIN_PHRASES = [
+    "report incident location",
+    "mark blocked sidewalk",
+    "note slippery floor",
+    "record license plate",
+    "share live situation",
+    "need medical help",
+    "crowd moving fast",
+    "exit route here",
+    "avoid this area",
+    "request backup now",
+    "call emergency line",
+    "suspect heading north",
+    "road closed ahead",
+    "temporary safe zone",
+    "hazard on road",
+    "meeting point moved",
+    "short power outage",
+    "signal is weak",
+    "send quick update",
+    "mark first aid",
+    "stairs not safe",
+    "use side entrance",
+    "traffic standstill",
+    "reroute immediately",
+    "check camera feed",
+    "bridge is crowded",
+    "keep distance please",
+    "watch falling objects",
+    "wind gusts rising",
+    "flash flood risk",
+    "report new symptom",
+    "mask required here",
+    "keep right side",
+    "left lane blocked",
+    "elevator out service",
+    "line forms here",
+    "need translation help",
+    "lost child here",
+    "return item found",
+    "shelter in place",
+    "evacuate level two",
+    "stairs to lobby",
+    "gate changed now",
+    "train delayed again",
+    "bus rerouted west",
+    "use alternate path",
+    "check oxygen level",
+    "low battery warning",
+    "send proof photo",
+    "upload short clip",
+    "mute background noise",
+    "note time and place",
+    "mark entrance A",
+    "meet at corner",
+    "arriving in five",
+    "two minutes late",
+    "on foot now",
+    "crossing the street",
+    "at next stop"
+]
+
+def _load_phrases_from_file(path: str, min_len=2, max_len=5) -> List[str]:
+    f = Path(path)
+    if not f.exists():
+        return []
+    phrases = []
+    with f.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            s = line.strip()
+            if not s:
+                continue
+            if 2 <= len(s.split()) <= max_len:
+                phrases.append(s.lower())
+    return phrases
+
+def build_stimuli_for_block() -> List[str]:
+    pool = _load_phrases_from_file(PHRASES_FILE)
+    if not pool:
+        pool = _BUILTIN_PHRASES[:]
+    k = min(6, len(pool))
+    phrases = random.sample(pool, k=k) if k > 0 else []
+
+    digit_lens = [3, 4]
+    digits = [f"{random.randint(0, 10**random.choice(digit_lens)-1):0{random.choice(digit_lens)}d}" for _ in range(6)]
+
+    alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{};:,.?/\\|"
+    rndchars = ["".join(random.choice(alphabet) for _ in range(random.randint(3,5))) for _ in range(3)]
+
+    stimuli = phrases + digits + rndchars
+    random.shuffle(stimuli)
+    while len(stimuli) < 15:
+        stimuli.append(random.choice(_BUILTIN_PHRASES))
+    return stimuli[:15]
+
+
+# ===== Utilities =====
 def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
-
 def unique_filename(path: Path) -> Path:
-    """If path exists, append a suffix to avoid overwrite."""
     if not path.exists():
         return path
-    stem = path.stem
-    suffix = path.suffix
+    stem, suffix = path.stem, path.suffix
     i = 1
     while True:
         candidate = path.with_name(f"{stem}_{i}{suffix}")
@@ -48,158 +170,225 @@ def unique_filename(path: Path) -> Path:
             return candidate
         i += 1
 
+def safe_filename_from_text(text: str, max_len: int = 80) -> str:
+    """
+    Convert stimulus text to a safe ASCII filename stem:
+    - normalize to NFKD, strip accents
+    - lowercase
+    - spaces -> underscores
+    - keep [a-z0-9._-], remove others
+    - collapse multiple underscores/dots/dashes
+    - trim to max_len
+    """
+    norm = unicodedata.normalize("NFKD", text)
+    ascii_str = norm.encode("ascii", "ignore").decode("ascii")
+    s = ascii_str.lower().strip()
+    s = s.replace(" ", "_")
+    s = re.sub(r"[^a-z0-9._-]", "", s)
+    s = re.sub(r"[_\-\.]{2,}", lambda m: m.group(0)[0], s)
+    s = s.strip("._-")
+    if not s:
+        s = "untitled"
+    if len(s) > max_len:
+        s = s[:max_len].rstrip("._-")
+    return s
 
-def overlay_text(frame, text, font_scale=3.0, thickness=4, color=(255, 255, 255)):
+
+def overlay_center_text(frame, text, font_scale=2.2, thickness=5, color=(255,255,255)):
     h, w = frame.shape[:2]
     font = cv2.FONT_HERSHEY_SIMPLEX
     (tw, th), _ = cv2.getTextSize(text, font, font_scale, thickness)
-    x = (w - tw) // 2
+    x = max(12, (w - tw) // 2)
     y = (h + th) // 2
-    # draw outline for readability
-    cv2.putText(frame, text, (x, y), font, font_scale, (0, 0, 0), thickness + 6, cv2.LINE_AA)
+    cv2.putText(frame, text, (x, y), font, font_scale, (0,0,0), thickness + 6, cv2.LINE_AA)
     cv2.putText(frame, text, (x, y), font, font_scale, color, thickness, cv2.LINE_AA)
 
+def overlay_label(frame, text, x=12, y=32):
+    cv2.putText(frame, text, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255,255,255), 2, cv2.LINE_AA)
 
-def run_one_capture(cap: cv2.VideoCapture, out_path: Path, duration: float, preview: float, fps: float, auto_start: bool, codec: str, countdown: int = 3) -> bool:
-    """Run one cycle of preview+record. Returns True to continue, False to stop (user pressed 'q')."""
-    ensure_dir(out_path)
 
-    code = make_code()
-    filename = f"cly_{code}.mp4"
-    filepath = unique_filename(out_path / filename)
+# ===== One trial =====
+def run_one_trial(cap: cv2.VideoCapture,
+                  out_dir: Path,
+                  block_id: int,
+                  trial_idx: int,
+                  stimulus: str,
+                  duration: float,
+                  preview: float,
+                  fps: float,
+                  codec: str,
+                  countdown: int,
+                  pressure_label: str,
+                  pinch_label: str) -> Path:
+    """
+    Preview -> countdown -> record.
+    - Window shows overlays (stimulus/labels/countdown/trajectory).
+    - Video file stores CLEAN frames only (no overlays at all).
+    - Filename equals safe(stimulus).
+    """
+    ensure_dir(out_dir)
 
-    # Try to read a frame to get dimensions
-    ret, frame = cap.read()
-    if not ret:
-        print('Failed to read from camera during initialization for this capture')
-        return False
-
-    height, width = frame.shape[:2]
+    ok, frame = cap.read()
+    if not ok:
+        raise RuntimeError("Camera read failed")
+    H, W = frame.shape[:2]
 
     fourcc = cv2.VideoWriter_fourcc(*codec)
-    writer = cv2.VideoWriter(str(filepath), fourcc, fps, (width, height))
+    stem = safe_filename_from_text(stimulus)
+    save_path = unique_filename(out_dir / f"{stem}.mp4")
+    writer = cv2.VideoWriter(str(save_path), fourcc, fps, (W, H))
 
-    window = 'data_collect'
-    cv2.namedWindow(window, cv2.WINDOW_NORMAL)
-
+    # Optional detector (for on-screen trajectory ONLY)
     try:
-        # Preview stage
-        preview_start = time.time()
-        while time.time() - preview_start < preview:
-            ret, frame = cap.read()
-            if not ret:
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from hand_track.finger_tracking import HandWritingDetector, smart_smooth
+        detector = HandWritingDetector()
+    except Exception:
+        detector, smart_smooth = None, None
+
+    trajectory = []
+    history_points = []
+    prev_index_pos = None
+    MAX_TRAJECTORY_POINTS = 2048
+
+    def process_and_draw(process_frame, draw_frame):
+        """Run detector on clean frame; draw trajectory ONLY on draw_frame."""
+        nonlocal prev_index_pos, trajectory, history_points
+        if detector is None:
+            return
+        is_writing = detector.process(process_frame)
+        current_pos = detector.index_tip_position
+        if is_writing and current_pos != (0, 0):
+            if prev_index_pos is not None:
+                smoothed = smart_smooth(current_pos, prev_index_pos, history_points)
+                prev_index_pos = smoothed
+                trajectory.append(smoothed)
+            else:
+                trajectory.append(None)
+                smoothed = current_pos
+                prev_index_pos = current_pos
+                trajectory.append(smoothed)
+            cv2.circle(draw_frame, smoothed, 12, (0, 0, 255), -1)
+        else:
+            prev_index_pos = None
+            history_points.clear()
+        for i in range(1, len(trajectory)):
+            if trajectory[i-1] is not None and trajectory[i] is not None:
+                cv2.line(draw_frame, trajectory[i-1], trajectory[i], (0, 255, 0), 2)
+        if len(trajectory) > MAX_TRAJECTORY_POINTS:
+            trajectory = trajectory[-MAX_TRAJECTORY_POINTS:]
+
+    # ===== Preview (not recorded) =====
+    t0 = time.time()
+    while time.time() - t0 < preview:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        clean = frame  # keep clean for potential processing
+        disp = frame.copy()
+        overlay_center_text(disp, stimulus, font_scale=2.0)
+        overlay_label(disp, f"Block: {pressure_label} | Mode: {pinch_label}", 12, 32)
+        remain = int(preview - (time.time() - t0)) + 1
+        overlay_label(disp, f"Preview: {remain}s", 12, 64)
+        process_and_draw(clean, disp)
+        cv2.imshow(WINDOW_NAME, disp)
+        if (cv2.waitKey(1) & 0xFF) == ord('q'):
+            writer.release()
+            raise KeyboardInterrupt("User aborted")
+
+    # ===== Countdown (not recorded) =====
+    if countdown and countdown > 0:
+        cd_start = time.time()
+        while True:
+            elapsed = time.time() - cd_start
+            if elapsed >= countdown:
                 break
-            disp = frame.copy()
-            overlay_text(disp, code, font_scale=3.0)
-            remaining = int(preview - (time.time() - preview_start)) + 1
-            cv2.putText(disp, f"Preview: {remaining}s", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
-            cv2.imshow(window, disp)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                print('User requested stop (q) during preview')
-                return False
-
-        if not auto_start:
-            print(f"Ready to record for {duration} seconds. Press SPACE to start, or 'q' to cancel.")
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                disp = frame.copy()
-                overlay_text(disp, code, font_scale=3.0)
-                cv2.imshow(window, disp)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord(' '):
-                    break
-                if key == ord('q'):
-                    print('User requested stop (q) before recording')
-                    return False
-
-        # Countdown before starting recording (big centered numbers)
-        if countdown and countdown > 0:
-            cd_start = time.time()
-            while True:
-                elapsed = time.time() - cd_start
-                if elapsed >= countdown:
-                    break
-                ret, frame = cap.read()
-                if not ret:
-                    break
-                disp = frame.copy()
-                # show the code in smaller text and the countdown big in center
-                overlay_text(disp, code, font_scale=2.0)
-                rem = int(math.ceil(countdown - elapsed))
-                # large red countdown
-                overlay_text(disp, str(rem), font_scale=6.0, color=(0, 0, 255), thickness=6)
-                cv2.imshow(window, disp)
-                key = cv2.waitKey(1) & 0xFF
-                if key == ord('q'):
-                    print('User requested stop (q) during countdown')
-                    return False
-
-        # Recording stage
-        print(f"Recording to {filepath} ...")
-        record_start = time.time()
-        while time.time() - record_start < duration:
-            ret, frame = cap.read()
-            if not ret:
-                print('Frame read failed during recording')
+            ok, frame = cap.read()
+            if not ok:
                 break
+            clean = frame
             disp = frame.copy()
-            overlay_text(disp, code, font_scale=3.0)
-            # draw countdown
-            remaining = max(0, duration - (time.time() - record_start))
-            cv2.putText(disp, f"Rec: {remaining:.1f}s", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
-            writer.write(frame)
-            cv2.imshow(window, disp)
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q'):
-                print('User requested stop (q) during recording')
-                return False
+            overlay_center_text(disp, stimulus, font_scale=1.9)
+            rem = int(math.ceil(countdown - elapsed))
+            (tw, th), _ = cv2.getTextSize(str(rem), cv2.FONT_HERSHEY_SIMPLEX, 6.0, 6)
+            cx, cy = (disp.shape[1] - tw) // 2, (disp.shape[0] + th) // 2
+            cv2.putText(disp, str(rem), (cx, cy), cv2.FONT_HERSHEY_SIMPLEX, 6.0, (0, 0, 255), 6, cv2.LINE_AA)
+            overlay_label(disp, f"Block: {pressure_label} | Mode: {pinch_label}", 12, 32)
+            process_and_draw(clean, disp)
+            cv2.imshow(WINDOW_NAME, disp)
+            if (cv2.waitKey(1) & 0xFF) == ord('q'):
+                writer.release()
+                raise KeyboardInterrupt("User aborted")
 
-        print(f"Saved: {filepath}")
-        return True
+    # ===== Recording (SAVE CLEAN FRAMES) =====
+    rec_start = time.time()
+    while time.time() - rec_start < duration:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        clean = frame                    # what we save
+        disp = frame.copy()              # what we show (with overlays)
+        overlay_center_text(disp, stimulus, font_scale=1.9)
+        remain = max(0.0, duration - (time.time() - rec_start))
+        overlay_label(disp, f"REC: {remain:.1f}s", 12, 64)
+        overlay_label(disp, f"Block: {pressure_label} | Mode: {pinch_label}", 12, 32)
+        process_and_draw(clean, disp)
 
-    finally:
-        writer.release()
+        writer.write(clean)              # <<< save CLEAN frame only
+        cv2.imshow(WINDOW_NAME, disp)
+        if (cv2.waitKey(1) & 0xFF) == ord('q'):
+            writer.release()
+            raise KeyboardInterrupt("User aborted")
 
-
-def parse_args():
-    p = argparse.ArgumentParser(description='Collect short labelled video clips by showing a 4-digit code on the preview.')
-    p.add_argument('--camera', '-c', type=int, default=1, help='Camera index for cv2.VideoCapture')
-    p.add_argument('--out', '-o', type=str, default='data/test_videos', help='Output directory for saved videos')
-    p.add_argument('--duration', '-d', type=float, default=7.0, help='Recording duration in seconds')
-    p.add_argument('--preview', type=float, default=2.0, help='Preview time before start (seconds)')
-    p.add_argument('--fps', type=float, default=60.0, help='Frames per second for output video')
-    p.add_argument('--auto', action='store_true', default=True, help='Automatically start recording after preview without waiting for SPACE (default ON). Use --no-auto to disable.')
-    p.add_argument('--no-auto', dest='auto', action='store_false', help='Disable automatic start; wait for SPACE to begin each recording')
-    p.add_argument('--once', action='store_true', help='Record only a single clip then exit')
-    p.add_argument('--countdown', type=int, default=3, help='Show a centered countdown (seconds) before each recording (default 3)')
-    p.add_argument('--codec', type=str, default='mp4v', help='FourCC codec for cv2.VideoWriter (default mp4v)')
-    return p.parse_args()
+    writer.release()
+    return save_path
 
 
 def main():
-    args = parse_args()
-    cap = cv2.VideoCapture(args.camera)
+    duration, pressure_txt, pinch_txt = _block_cfg(BLOCK)
+
+    cap = cv2.VideoCapture(CAMERA_INDEX)
     if not cap.isOpened():
-        raise RuntimeError(f"Could not open camera index {args.camera}")
+        raise RuntimeError(f"Could not open camera index {CAMERA_INDEX}")
+    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
 
-    out_path = Path(args.out)
+    out_path = Path(OUT_DIR)
+    ensure_dir(out_path)
 
-    try:
-        while True:
-            cont = run_one_capture(cap, out_path, args.duration, args.preview, args.fps, args.auto, args.codec, countdown=args.countdown)
-            if not cont:
-                break
-            if args.once:
-                break
-            # small pause between clips to allow the system to settle (and for user to change the scene if needed)
-            time.sleep(0.2)
-    finally:
-        cap.release()
-        cv2.destroyAllWindows()
+    stimuli = build_stimuli_for_block()
+
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    log_path = out_path / f"session_{ts}_b{BLOCK}.csv"
+    with log_path.open("w", newline="", encoding="utf-8") as fcsv:
+        writer = csv.writer(fcsv)
+        writer.writerow(["filename", "block", "pressure", "pinch_mode", "stimulus", "duration_sec", "preview_sec", "fps"])
+        try:
+            for idx, stim in enumerate(stimuli, start=1):
+                saved = run_one_trial(
+                    cap=cap,
+                    out_dir=out_path,
+                    block_id=BLOCK,
+                    trial_idx=idx,
+                    stimulus=stim,
+                    duration=duration,
+                    preview=PREVIEW_SEC,
+                    fps=FPS,
+                    codec=CODEC,
+                    countdown=COUNTDOWN_SEC,
+                    pressure_label=pressure_txt,
+                    pinch_label=pinch_txt
+                )
+                print(f"[OK] Saved: {saved.name}")
+                writer.writerow([saved.name, BLOCK, pressure_txt, pinch_txt, stim, duration, PREVIEW_SEC, FPS])
+                time.sleep(0.2)
+        except KeyboardInterrupt:
+            print("Aborted by user. Partial block saved.")
+        finally:
+            cap.release()
+            cv2.destroyAllWindows()
+
+    print(f"Log saved: {log_path}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
