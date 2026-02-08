@@ -37,8 +37,8 @@ CAMERA_INDEX = 1
 OUT_DIR       = "data/test_videos"
 FPS           = 60.0
 CODEC         = "mp4v"
-PREVIEW_SEC   = 2.0
-COUNTDOWN_SEC = 3
+PREVIEW_SEC   = 1.0
+COUNTDOWN_SEC = 1
 WINDOW_NAME   = "data_collect"
 
 # Optional external phrase list (one per line, 2–5 words)

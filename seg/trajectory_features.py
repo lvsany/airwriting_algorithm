@@ -82,6 +82,7 @@ class TrajectoryFeatures:
         
         smoothed_xy = np.vstack((smoothed_x, smoothed_y)).T
 
+        # return self.xy
         return smoothed_xy
     
     # 计算直线度，平均曲率，角度，长度等

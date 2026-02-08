@@ -77,7 +77,7 @@ def smart_smooth(current_pos, prev_pos, history_points=history_points, max_windo
 
     # 确保窗口大小不超过历史点数量
     window_size = min(window_size, len(history_points))
-
+    # return current_pos
     # 计算加权移动平均
     if window_size > 1:
         points = np.array(history_points[-window_size:])
