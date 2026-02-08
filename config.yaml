@@ -1,5 +1,5 @@
-# 空中书写系统配置文件
-# 统一管理项目中的所有常用变量和参数
+# 空中书写系统配置文件 - Block A 版本
+# Block A: 双手检测、平面拟合、接触检测核心功能
 
 # ===== 视频和摄像头配置 =====
 video:
@@ -12,7 +12,7 @@ video:
 hand_detection:
   # MediaPipe手部检测参数
   static_image_mode: false
-  max_num_hands: 1
+  max_num_hands: 2  # Block A: 启用双手检测
   min_detection_confidence: 0.7
   min_tracking_confidence: 0.5
   
@@ -24,6 +24,45 @@ hand_detection:
   thumb_index_close_threshold: 0.085
   thumb_index_middle_press_threshold: 0.1
   two_finger_pinch_threshold: 0.15
+
+# ===== 手掌书写模式配置 (Block A) =====
+palm_writing:
+  # 是否启用手掌书写模式
+  enabled: true
+  
+  # 惯用手设置: 用哪只手写字 (right: 右手写字/左手画板, left: 左手写字/右手画板)
+  dominant_hand: "right"
+  
+  # 角色分配模式 (position: 基于位置, motion: 基于运动, manual: 手动)
+  role_assignment_mode: "position"
+  
+  # 手掌平面拟合参数
+  plane_fitting:
+    # RANSAC算法参数
+    ransac_iterations: 100
+    ransac_threshold: 0.01  # 单位: 米 (10mm)
+    
+    # 参考地标点 (用于平面拟合)
+    # 0: 手腕, 5: 食指根部, 17: 小指根部
+    reference_landmarks: [0, 5, 17]
+    
+    # 手掌坐标系原点 (手腕地标)
+    origin_landmark: 0
+  
+  # 接触检测阈值
+  contact_detection:
+    # 距离阈值 (单位: 毫米)
+    idle_to_hover_threshold: 100   # 空闲→悬停
+    hover_to_touch_threshold: 30   # 悬停→触碰
+    touch_to_write_threshold: 15   # 触碰→书写
+    write_to_lift_threshold: 25    # 书写→抬起
+    
+    # 时序平滑窗口 (帧数)
+    temporal_smoothing_window: 3
+    
+    # 速度阈值 (用于辅助判断, 单位: 像素/秒)
+    min_writing_speed: 50
+    max_hover_speed: 200
 
 # ===== 轨迹跟踪配置 =====
 trajectory:

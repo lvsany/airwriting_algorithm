@@ -17,10 +17,12 @@ from seg.detector import ConnectStrokeDetector
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from hand_track.finger_tracking import HandWritingDetector, smart_smooth
+from hand_track.dual_hand_detector import DualHandDetector
 from utils.online_trace_converter import OnlineTraceConverter
 from projection.projection_visualizer import ProjectionVisualizer
 from projection.velocity_visualizer import VelocityVisualizer
 import yaml
+import time
 
 # 加载配置文件】
 with open("./config.yaml", 'r', encoding='utf-8') as file:
@@ -68,8 +70,15 @@ def process_single_video(video_path: str, output_dir: str, projection_visualizer
     duration = total_frames / fps if fps > 0 else 0
     print(f"视频信息: {total_frames} 帧, {fps:.1f} FPS, {duration:.1f} 秒")
     
-    # 初始化手势检测器
-    detector = HandWritingDetector(gesture_mode=CONFIG['hand_detection']['gesture_mode'])
+    # 初始化手势检测器 - 根据配置选择单手或双手模式
+    palm_mode_enabled = CONFIG.get('palm_writing', {}).get('enabled', False)
+    
+    if palm_mode_enabled:
+        detector = DualHandDetector()
+        print("✓ 使用双手检测模式（手掌书写）")
+    else:
+        detector = HandWritingDetector(gesture_mode=CONFIG['hand_detection']['gesture_mode'])
+        print("✓ 使用单手检测模式（空中书写）")
     
     # 初始化在线轨迹转换器（用于平滑和轨迹管理）
     online_trace_converter = OnlineTraceConverter(smoothing_window=CONFIG['online_trace']['smoothing_window'])
@@ -81,6 +90,8 @@ def process_single_video(video_path: str, output_dir: str, projection_visualizer
     prev_is_writing = False
     
     frame_count = 0
+    start_time = time.time()
+    
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
@@ -90,9 +101,27 @@ def process_single_video(video_path: str, output_dir: str, projection_visualizer
         if frame_count % 100 == 0:
             print(f"处理进度: {frame_count}/{total_frames} ({frame_count*100/total_frames:.1f}%)")
         
+        # 计算时间戳
+        timestamp = time.time() - start_time
+        
         # 处理手势检测
-        is_writing = detector.process(frame)
-        current_index_pos = detector.index_tip_position
+        if palm_mode_enabled:
+            is_writing = detector.process(frame, timestamp)
+            # 使用手掌坐标系中的位置（转换为像素坐标用于显示）
+            palm_pos = detector.get_writing_position()
+            if palm_pos is not None:
+                # 将手掌坐标（米）转换为屏幕像素坐标（简单缩放）
+                # 假设手掌约10cm宽，映射到屏幕宽度
+                scale = frame.shape[1] / 0.1  # 像素/米
+                current_index_pos = (
+                    int(palm_pos[0] * scale + frame.shape[1] / 2),
+                    int(palm_pos[1] * scale + frame.shape[0] / 2)
+                )
+            else:
+                current_index_pos = detector.get_screen_position()
+        else:
+            is_writing = detector.process(frame)
+            current_index_pos = detector.index_tip_position
         
         # 检测书写状态变化，实现自动分词
         if prev_is_writing and not is_writing:
