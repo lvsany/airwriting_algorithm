@@ -156,9 +156,9 @@ def draw_debug_info(frame, detector, is_writing, fps, palm_mode=True):
     # 左侧面板
     pw = 260
     panel = frame.copy()
-    rounded_rect(panel, (8, 8), (8 + pw, 220), C['panel'], 10)
+    rounded_rect(panel, (8, 8), (8 + pw, 250), C['panel'], 10)
     cv2.addWeighted(panel, 0.82, frame, 0.18, 0, frame)
-    rounded_rect(frame, (8, 8), (8 + pw, 220), C['panel_edge'], 10, 1)
+    rounded_rect(frame, (8, 8), (8 + pw, 250), C['panel_edge'], 10, 1)
 
     x0 = 22
     y = 32
@@ -195,16 +195,28 @@ def draw_debug_info(frame, detector, is_writing, fps, palm_mode=True):
         y += 26
 
         # 距离
+        thr = detector.contact_sm.writing_threshold
         put_text(frame, "Distance", (x0, y), 0.35, C['text_dim'])
         if detector.dist_palm is not None:
             d = detector.dist_palm
             max_d = 120.0
             ratio = d / max_d
-            bar_color = C['writing'] if d < 15 else C['touch'] if d < 30 else C['hover'] if d < 100 else C['idle']
+            bar_color = C['writing'] if d <= thr else C['touch'] if d < thr * 2 else C['hover'] if d < 100 else C['idle']
             draw_hbar(frame, x0 + 80, y - 10, 140, 12, ratio, bar_color)
             put_text(frame, f"{d:.0f}mm", (x0 + 82, y), 0.32, (255, 255, 255), 1)
         else:
             put_text(frame, "OUT", (x0 + 80, y), 0.35, C['warn'])
+        y += 26
+
+        # 自适应阈值
+        sm = detector.contact_sm
+        buf_size = len(sm.adaptive_buffer)
+        is_adaptive = sm.adaptive_enabled and buf_size >= sm.adaptive_min_samples
+        put_text(frame, "Threshold", (x0, y), 0.35, C['text_dim'])
+        thr_color = C['writing'] if is_adaptive else C['warn']
+        put_text(frame, f"{thr:.1f}mm", (x0 + 80, y), 0.38, thr_color, 1)
+        mode_label = "ADAPTIVE" if is_adaptive else f"WARMUP {buf_size}/{sm.adaptive_min_samples}"
+        put_text(frame, mode_label, (x0 + 130, y), 0.28, thr_color, 1)
         y += 26
 
         # 坐标
@@ -304,7 +316,7 @@ def main():
     print("  Block A - Palm Writing Real-time Test")
     print("=" * 50)
 
-    cap = cv2.VideoCapture("test.mp4")
+    cap = cv2.VideoCapture(1)
     if not cap.isOpened():
         print("[ERR] Cannot open camera")
         return

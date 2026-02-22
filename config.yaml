@@ -51,18 +51,20 @@ palm_writing:
   
   # 接触检测阈值
   contact_detection:
-    # 距离阈值 (单位: 毫米)
-    idle_to_hover_threshold: 100   # 空闲→悬停
-    hover_to_touch_threshold: 30   # 悬停→触碰
-    touch_to_write_threshold: 15   # 触碰→书写
-    write_to_lift_threshold: 25    # 书写→抬起
-    
+    # 距离阈值 (单位: 毫米) —— 冷启动兜底值，自适应启用后会被覆盖
+    writing_threshold: 12
+
     # 时序平滑窗口 (帧数)
     temporal_smoothing_window: 3
-    
-    # 速度阈值 (用于辅助判断, 单位: 像素/秒)
-    min_writing_speed: 50
-    max_hover_speed: 200
+
+    # 自适应阈值（Otsu 方法）
+    adaptive_threshold:
+      enabled: true
+      buffer_size: 300        # 滑动窗口大小（300帧 @ 60fps ≈ 5秒）
+      min_samples: 60         # 至少积累多少帧才开始第一次自适应（≈1秒）
+      update_interval: 30     # 每隔多少帧重新计算一次（≈0.5秒）
+      threshold_min: 3.0      # 阈值下界 (mm)，防止误触
+      threshold_max: 30.0     # 阈值上界 (mm)，防止失灵
 
 # ===== 轨迹跟踪配置 =====
 trajectory:

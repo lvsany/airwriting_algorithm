@@ -96,7 +96,6 @@ class DualHandDetector:
                 
                 proj = palm_sys.project_to_plane(tip_3d)
                 self.write_pos = (int(proj[0] * self.frame_shape[1]), int(proj[1] * self.frame_shape[0]))
-                self._draw_debug(frame, palm_sys)
             else:
                 self.is_writing = False
                 self.write_pos_palm = None
@@ -120,13 +119,21 @@ class DualHandDetector:
                 self.write_lm, self.palm_lm = self.left_lm, self.right_lm
     
     def _draw_debug(self, frame, ps):
-        if self.dist_palm:
+        sm = self.contact_sm
+        thr = sm.writing_threshold
+        buf_size = len(sm.adaptive_buffer)
+        is_adaptive = sm.adaptive_enabled and buf_size >= sm.adaptive_min_samples
+
+        if self.dist_palm is not None:
             cv2.putText(frame, f"Dist: {self.dist_palm:.1f}mm", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-        cv2.putText(frame, f"State: {self.contact_sm.get_state_name()}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+        cv2.putText(frame, f"State: {sm.get_state_name()}", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+        thr_label = f"Threshold: {thr:.1f}mm  [{'ADAPTIVE' if is_adaptive else f'WARMUP {buf_size}/{sm.adaptive_min_samples}'}]"
+        thr_color = (80, 230, 120) if is_adaptive else (0, 165, 255)
+        cv2.putText(frame, thr_label, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, thr_color, 2)
         if self.write_pos_palm:
-            cv2.putText(frame, f"Coord: ({self.write_pos_palm[0]:.3f}, {self.write_pos_palm[1]:.3f})", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            cv2.putText(frame, f"Coord: ({self.write_pos_palm[0]:.3f}, {self.write_pos_palm[1]:.3f})", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
         if self.write_lm and not ps.is_within_palm_boundary(get_landmark_3d(self.write_lm, 8)):
-            cv2.putText(frame, "Out of Boundary", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.putText(frame, "Out of Boundary", (10, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
         if self.is_writing and self.write_pos:
             cv2.circle(frame, self.write_pos, 8, (0, 0, 255), -1)
     
