@@ -13,9 +13,9 @@ from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from hand_track.dual_hand_detector import DualHandDetector
-from hand_track.finger_tracking import HandWritingDetector, smart_smooth
-from utils.online_trace_converter import OnlineTraceConverter
+from src.hand_track.dual_hand_detector import DualHandDetector
+from src.hand_track.finger_tracking import HandWritingDetector, smart_smooth
+from src.utils.online_trace_converter import OnlineTraceConverter
 
 with open("./config.yaml", 'r', encoding='utf-8') as file:
     CONFIG = yaml.safe_load(file)
@@ -316,7 +316,7 @@ def main():
     print("  Block A - Palm Writing Real-time Test")
     print("=" * 50)
 
-    cap = cv2.VideoCapture("1.mp4")  # 替换为0使用摄像头
+    cap = cv2.VideoCapture(2)  # 替换为0使用摄像头
     if not cap.isOpened():
         print("[ERR] Cannot open camera")
         return

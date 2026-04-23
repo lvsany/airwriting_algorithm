@@ -11,9 +11,9 @@ import os
 from typing import Optional, Tuple, Dict
 from enum import Enum
 
-from hand_track.palm_coordinate_system import PalmPlaneTracker
-from hand_track.contact_state_machine import ContactStateMachine
-from utils.geometry_utils import get_landmark_3d
+from src.hand_track.palm_coordinate_system import PalmPlaneTracker
+from src.hand_track.contact_state_machine import ContactStateMachine
+from src.utils.geometry_utils import get_landmark_3d
 
 
 # 加载配置文件

@@ -3,7 +3,7 @@ import mediapipe as mp
 import numpy as np
 import yaml
 import os
-from hand_track.hand_writing_detector import HandWritingDetector
+from src.hand_track.hand_writing_detector import HandWritingDetector
 
 # 加载配置文件
 config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.yaml')
