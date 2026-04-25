@@ -33,7 +33,7 @@ def parse_args():
                         default=os.path.join(os.path.dirname(__file__), '..', 'data'),
                         help='数据存储目录')
     parser.add_argument('--sticker-color', type=str, default='green',
-                        choices=['green', 'yellow', 'pink', 'blue'],
+                        choices=['green', 'yellow', 'pink', 'blue', 'black'],
                         help='荧光贴纸颜色（用于 HSV 自动标注）')
     parser.add_argument('--label-mode', type=str, default='sticker',
                         choices=['sticker', 'keyboard'],
