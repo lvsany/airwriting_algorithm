@@ -1,0 +1,7 @@
+trajectory_features:
+  savgol_window_size: 10
+  savgol_polyorder: 3
+  resample_ds: 3
+
+
+connect_scorer:
