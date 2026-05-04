@@ -1,0 +1,33 @@
+{
+  "sid": "zwj",
+  "lighting": "normal",
+  "speed": "normal",
+  "total_frames": 1390,
+  "fps_actual": 15.0,
+  "duration_sec": 93,
+  "detect_rate": 0.687,
+  "prompt_word_count": 20,
+  "prompt_words": [
+    "the",
+    "and",
+    "you",
+    "for",
+    "that",
+    "with",
+    "this",
+    "have",
+    "from",
+    "not",
+    "hello",
+    "world",
+    "apple",
+    "water",
+    "music",
+    "happy",
+    "school",
+    "friend",
+    "green",
+    "light"
+  ],
+  "collect_time": "2026-05-04 18:14:42"
+}
