@@ -19,8 +19,6 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from experiments.exp_a.a1_collect import run_collect
-from experiments.exp_a.a2_analyze import run_analyze
-from experiments.exp_a.a3_roc import run_roc
 
 
 def parse_args():
@@ -57,16 +55,6 @@ def main():
                     label_mode=args.label_mode,
                     sticker_color=args.sticker_color)
         print("[Exp-A1] 完成\n")
-
-    if args.mode in ('analyze', 'all'):
-        print("[Exp-A2] 开始特征统计分析...")
-        run_analyze(subject=args.subject, data_dir=data_dir)
-        print("[Exp-A2] 完成\n")
-
-    if args.mode in ('roc', 'all'):
-        print("[Exp-A3] 开始 ROC 曲线对比...")
-        run_roc(subject=args.subject, data_dir=data_dir)
-        print("[Exp-A3] 完成\n")
 
 
 if __name__ == '__main__':

@@ -68,7 +68,7 @@ python -m experiments.exp_a.exp_a_runner --mode collect --subject s01
 python -m experiments.exp_a.exp_a_runner --mode collect --subject s01 --label-mode keyboard
 
 # 指定贴纸颜色
-python -m experiments.exp_a.exp_a_runner --mode collect --subject s01 --sticker-color yellow
+python -m experiments.exp_a.exp_a_runner --mode collect --subject s01 --sticker-color black
 ```
 
 ### 采集界面说明

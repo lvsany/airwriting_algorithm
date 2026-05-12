@@ -31,7 +31,7 @@ STICKER_HSV = {
     'yellow': ((20,  100, 100), (35,  255, 255)),
     'pink':   ((140, 80,  80),  (170, 255, 255)),
     'blue':   ((85, 15, 120),   (225, 255, 255)),
-    'black':  ((0,   0,   0),   (180, 80,  90)),
+    'black':  ((0,   0,   0),   (45, 45,  45)),
 }
 STICKER_OCCLUDE_RATIO = 0.4   # 面积低于参考值此比例时判定为遮挡
 STICKER_CALIB_FRAMES = 30     # 标定所需帧数
@@ -198,7 +198,7 @@ def run_collect(subject: str, data_dir: str,
     detector  = DualHandDetector()
     feat_buf  = FeatureBuffer()
 
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture("aaa.mp4")
 
     out_csv = os.path.join(data_dir, f'exp_a1_{subject}.csv')
     out_video = os.path.join(data_dir, f'exp_a1_{subject}_raw.mp4')
