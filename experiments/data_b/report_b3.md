@@ -5,7 +5,7 @@ Exp-B 阶段三分析报告
 1. 数据与运行条件
 
 Exp-B 输入文件：
-- `experiments/data_b/exp_b1_zwj_normal_normal_features_labeled.csv`
+- `experiments/data_b/exp_b1_s01_normal_normal_features_labeled.csv`
 
 Exp-B 数据统计：
 - 总帧数：1390
@@ -30,28 +30,6 @@ Exp-A 参照：
 
 2. 图表
 
-Task B1：
-![task_b1_overview](figures/task_b1_overview.png)
-
-Task B2：
-![task_b2_discriminability](figures/task_b2_discriminability.png)
-
-Task B3：
-![task_b3_kde_compare](figures/task_b3_kde_compare.png)
-
-Task B4：
-![task_b4_temporal_alignment](figures/task_b4_temporal_alignment.png)
-
-Task B5：
-![task_b5_ablation](figures/task_b5_ablation.png)
-
-Task B6：
-![task_b6_transfer](figures/task_b6_transfer.png)
-
-Task B8：
-![task_b8_grouped](figures/task_b8_grouped.png)
-
-Task B7 未生成图。当前受试者数为 1，低于 LOSO 要求的 3。
 
 3. 核心问题结论
 

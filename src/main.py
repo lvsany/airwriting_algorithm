@@ -120,7 +120,7 @@ def draw_palm_plane_visualization(frame, detector):
         return (int(p3[0] * w), int(p3[1] * h))
 
     # 手掌凸包（全21关键点取ConvexHull）
-    all_pts = np.array([p2d([lm[i].x, lm[i].y, lm[i].z]) for i in range(21)])
+    all_pts = np.array([p2d([lm[i].x, lm[i].y, lm[i].z]) for i in range(21)])k
     hull = cv2.convexHull(all_pts)
 
     overlay = frame.copy()

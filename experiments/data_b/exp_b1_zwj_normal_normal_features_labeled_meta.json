@@ -1,7 +1,7 @@
 {
-  "source_features_csv": "experiments/data_b/exp_b1_zwj_normal_normal_features.csv",
-  "source_video": "experiments/data_b/exp_b1_zwj_normal_normal.mp4",
-  "output_features_csv": "experiments/data_b/exp_b1_zwj_normal_normal_features_labeled.csv",
+  "source_features_csv": "experiments/data_b/exp_b1_s01_normal_normal_features.csv",
+  "source_video": "experiments/data_b/exp_b1_s01_normal_normal.mp4",
+  "output_features_csv": "experiments/data_b/exp_b1_s01_normal_normal_features_labeled.csv",
   "total_frames": 1390,
   "label_1_frames": 474,
   "label_0_frames": 916,

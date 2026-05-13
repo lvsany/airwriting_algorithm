@@ -1,9 +1,11 @@
 """
 Exp-A: 综合可视化分析（顶会发表标准）
+多受试者版本：per-subject 计算指标，跨受试者 mean ± std 汇总
 七个任务：数据概况、单特征判别力、KDE分布、时序对齐、消融ROC、错误分析、
          填0 vs NaN处理方式的AUROC对比验证
 """
 
+import glob
 import os
 import warnings
 import numpy as np
@@ -12,8 +14,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import seaborn as sns
+from matplotlib.gridspec import GridSpec
 from scipy import stats
-from scipy.special import betaln
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_curve, auc, precision_recall_curve
 from sklearn.model_selection import StratifiedKFold
@@ -42,8 +44,11 @@ C_CONTACT = WONG[6]   # vermillion
 C_NAN     = WONG[4]   # yellow
 C_VALID   = WONG[3]   # green
 
-DATA_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'exp_a1_s01.csv')
-FIG_DIR   = os.path.join(os.path.dirname(__file__), '..', 'data', 'figures')
+# Per-subject color cycle (up to 8 subjects)
+SUBJECT_COLORS = [WONG[1], WONG[5], WONG[3], WONG[6], WONG[7], WONG[0], '#777777', '#AAAAAA']
+
+DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
+FIG_DIR  = os.path.join(os.path.dirname(__file__), '..', 'data', 'figures')
 
 FEATURE_COLS = [
     'dist_raw', 'dist_local', 'v_n', 'a_n', 'sigma_d', 'v_t',
@@ -94,10 +99,20 @@ def add_panel_label(ax, label, x=-0.12, y=1.05):
             fontsize=12, fontweight='bold', va='top', ha='left')
 
 
-def load_data():
-    df = pd.read_csv(DATA_PATH)
-    df[FEATURE_COLS] = df[FEATURE_COLS].apply(pd.to_numeric, errors='coerce')
-    return df
+def load_all_subjects():
+    """Auto-detect exp_a1_s*.csv files; return (df_all, subject_dfs: dict)."""
+    files = sorted(glob.glob(os.path.join(DATA_DIR, 'exp_a1_s*.csv')))
+    if not files:
+        raise FileNotFoundError(f"No exp_a1_s*.csv files found in {DATA_DIR}")
+    subject_dfs = {}
+    for f in files:
+        sid = os.path.basename(f).replace('exp_a1_', '').replace('.csv', '')
+        df = pd.read_csv(f)
+        df[FEATURE_COLS] = df[FEATURE_COLS].apply(pd.to_numeric, errors='coerce')
+        df['subject_id'] = sid
+        subject_dfs[sid] = df
+    df_all = pd.concat(list(subject_dfs.values()), ignore_index=True)
+    return df_all, subject_dfs
 
 
 def compute_auroc_cv(X_col, y, n_splits=5):
@@ -152,8 +167,7 @@ def bhattacharyya_overlap(g1, g2, n_pts=500):
         kde2 = stats.gaussian_kde(g2)(x)
         kde1 /= kde1.sum()
         kde2 /= kde2.sum()
-        bc = float(np.sum(np.sqrt(kde1 * kde2)))
-        return float(np.clip(bc, 0, 1))
+        return float(np.clip(np.sum(np.sqrt(kde1 * kde2)), 0, 1))
     except Exception:
         return np.nan
 
@@ -175,223 +189,243 @@ def sig_stars(p):
 
 # ── Task 1: 数据概况图 ────────────────────────────────────────────────────────
 
-def task1_data_overview(df):
+def task1_data_overview(df_all, subject_dfs):
     print("\n[Task 1] 数据概况图...")
-    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-    fig.suptitle('Exp-A Data Overview', fontsize=13, fontweight='bold', y=1.01)
+    subjects = list(subject_dfs.keys())
+    N = len(subjects)
 
-    # (a) contact_label 时间轴
-    ax = axes[0, 0]
-    add_panel_label(ax, '(a)')
-    frames = df['frame_id'].values
-    labels = df['contact_label'].values
-    ax.fill_between(frames, 0, 1, where=(labels == 0),
-                    color=C_IDLE, alpha=0.6, label='IDLE', transform=ax.get_xaxis_transform())
-    ax.fill_between(frames, 0, 1, where=(labels == 1),
-                    color=C_CONTACT, alpha=0.6, label='CONTACT', transform=ax.get_xaxis_transform())
-    ax.set_xlabel('Frame ID')
-    ax.set_ylabel('Contact Label')
-    ax.set_yticks([0, 1])
-    ax.set_yticklabels(['IDLE', 'CONTACT'])
-    ax.set_xlim(frames[0], frames[-1])
-    ax.legend(loc='upper right', fontsize=9)
-    ax.set_title('Contact label timeline', fontsize=11)
+    # Layout: N timeline rows (top) + 1 row of 3 stat panels (bottom)
+    fig = plt.figure(figsize=(14, 2.5 * N + 5.5))
+    fig.suptitle('Exp-A Data Overview', fontsize=13, fontweight='bold', y=1.0)
+    gs = GridSpec(N + 1, 3, figure=fig, hspace=0.55, wspace=0.38,
+                  height_ratios=[1.2] * N + [3.0])
 
-    # (b) 接触事件持续帧数分布
-    ax = axes[0, 1]
-    add_panel_label(ax, '(b)')
-    contact_runs = []
-    in_contact, start = False, 0
-    for i, lbl in enumerate(labels):
-        if lbl == 1 and not in_contact:
-            in_contact, start = True, i
-        elif lbl == 0 and in_contact:
-            contact_runs.append(i - start)
-            in_contact = False
-    if in_contact:
-        contact_runs.append(len(labels) - start)
-    contact_runs = np.array(contact_runs)
-    median_dur = np.median(contact_runs)
-    ax.hist(contact_runs, bins=20, color=C_CONTACT, edgecolor='white', alpha=0.85)
-    ax.axvline(median_dur, color='black', linestyle='--', linewidth=1.5,
-               label=f'Median = {median_dur:.0f} fr')
-    ax.set_xlabel('Duration (frames)')
-    ax.set_ylabel('Count')
-    ax.set_title('Contact event duration', fontsize=11)
-    ax.legend(fontsize=9)
+    # (a) Per-subject contact label timelines
+    for row, sid in enumerate(subjects):
+        df = subject_dfs[sid]
+        ax = fig.add_subplot(gs[row, :])
+        frames = df['frame_id'].values
+        labels = df['contact_label'].values
+        ax.fill_between(frames, 0, 1, where=(labels == 0),
+                        color=C_IDLE, alpha=0.6, transform=ax.get_xaxis_transform())
+        ax.fill_between(frames, 0, 1, where=(labels == 1),
+                        color=C_CONTACT, alpha=0.6, transform=ax.get_xaxis_transform())
+        ax.set_xlim(frames[0], frames[-1])
+        ax.set_yticks([])
+        ax.set_ylabel(sid, fontsize=9, rotation=0, labelpad=28, va='center')
+        if row == 0:
+            ax.set_title('(a) Contact label timeline per subject', fontsize=11)
+            patches = [mpatches.Patch(color=C_IDLE, alpha=0.7, label='IDLE'),
+                       mpatches.Patch(color=C_CONTACT, alpha=0.7, label='CONTACT')]
+            ax.legend(handles=patches, loc='upper right', fontsize=8)
+        if row < N - 1:
+            ax.tick_params(labelbottom=False)
+        else:
+            ax.set_xlabel('Frame ID')
 
-    # (c) IDLE vs CONTACT 帧数对比
-    ax = axes[1, 0]
-    add_panel_label(ax, '(c)')
-    n_idle    = int((labels == 0).sum())
-    n_contact = int((labels == 1).sum())
-    total     = n_idle + n_contact
-    bars = ax.bar(['IDLE', 'CONTACT'], [n_idle, n_contact],
-                  color=[C_IDLE, C_CONTACT], edgecolor='white', width=0.5)
-    for bar, n in zip(bars, [n_idle, n_contact]):
-        pct = 100 * n / total
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 15,
-                f'{n}\n({pct:.1f}%)', ha='center', va='bottom', fontsize=9)
-    ax.set_ylabel('Frame count')
-    ax.set_title('IDLE vs CONTACT frame counts', fontsize=11)
-    ax.set_ylim(0, max(n_idle, n_contact) * 1.2)
+    # (b) Contact event duration — box plot per subject
+    ax_dur = fig.add_subplot(gs[N, 0])
+    add_panel_label(ax_dur, '(b)')
+    dur_data = []
+    for sid in subjects:
+        labels = subject_dfs[sid]['contact_label'].values.astype(int)
+        runs, in_c, start = [], False, 0
+        for i, lbl in enumerate(labels):
+            if lbl == 1 and not in_c:
+                in_c, start = True, i
+            elif lbl == 0 and in_c:
+                runs.append(i - start)
+                in_c = False
+        if in_c:
+            runs.append(len(labels) - start)
+        dur_data.append(runs)
+    positions = np.arange(N)
+    bp = ax_dur.boxplot(dur_data, positions=positions, widths=0.5,
+                        patch_artist=True,
+                        medianprops=dict(color='black', linewidth=1.5))
+    for patch, color in zip(bp['boxes'], SUBJECT_COLORS[:N]):
+        patch.set_facecolor(color)
+        patch.set_alpha(0.75)
+    ax_dur.set_xticks(positions)
+    ax_dur.set_xticklabels(subjects, fontsize=9)
+    ax_dur.set_xlabel('Subject')
+    ax_dur.set_ylabel('Duration (frames)')
+    ax_dur.set_title('Contact event duration', fontsize=11)
 
-    # (d) 各特征有效帧比例
-    ax = axes[1, 1]
-    add_panel_label(ax, '(d)')
-    total_frames = len(df)
-    valid_ratios = []
-    nan_ratios   = []
-    feat_names   = []
-    for f in FEATURE_COLS:
-        n_valid = df[f].notna().sum()
-        valid_ratios.append(n_valid / total_frames)
-        nan_ratios.append(1 - n_valid / total_frames)
-        feat_names.append(FEATURE_LABELS[f])
-    y_pos = np.arange(len(feat_names))
-    ax.barh(y_pos, valid_ratios, color=C_VALID, alpha=0.8, label='Valid')
-    ax.barh(y_pos, nan_ratios, left=valid_ratios, color=C_NAN, alpha=0.8, label='NaN')
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels(feat_names, fontsize=8.5)
-    ax.set_xlabel('Proportion of frames')
-    ax.set_title('Feature valid-frame ratio', fontsize=11)
-    ax.set_xlim(0, 1)
-    ax.axvline(0.5, color='gray', linestyle=':', linewidth=1)
-    ax.legend(loc='lower right', fontsize=9)
+    # (c) Class balance per subject — grouped bar
+    ax_bal = fig.add_subplot(gs[N, 1])
+    add_panel_label(ax_bal, '(c)')
+    x = np.arange(N)
+    width = 0.35
+    idle_counts    = [int((subject_dfs[sid]['contact_label'] == 0).sum()) for sid in subjects]
+    contact_counts = [int((subject_dfs[sid]['contact_label'] == 1).sum()) for sid in subjects]
+    totals = [i + c for i, c in zip(idle_counts, contact_counts)]
+    b1 = ax_bal.bar(x - width / 2, idle_counts, width, color=C_IDLE, label='IDLE', alpha=0.8)
+    b2 = ax_bal.bar(x + width / 2, contact_counts, width, color=C_CONTACT, label='CONTACT', alpha=0.8)
+    for bar, n, tot in zip(list(b1) + list(b2),
+                            idle_counts + contact_counts,
+                            totals + totals):
+        ax_bal.text(bar.get_x() + bar.get_width() / 2,
+                    bar.get_height() + tot * 0.012,
+                    f'{100 * n / tot:.0f}%',
+                    ha='center', va='bottom', fontsize=8)
+    ax_bal.set_xticks(x)
+    ax_bal.set_xticklabels(subjects, fontsize=9)
+    ax_bal.set_ylabel('Frame count')
+    ax_bal.set_title('Class balance per subject', fontsize=11)
+    ax_bal.legend(fontsize=8)
+
+    # (d) Feature valid ratio — mean ± std + individual subject dots
+    ax_feat = fig.add_subplot(gs[N, 2])
+    add_panel_label(ax_feat, '(d)')
+    feat_valid = np.array([
+        [subject_dfs[sid][f].notna().mean() for sid in subjects]
+        for f in FEATURE_COLS
+    ])  # shape: (n_feats, N)
+    means = feat_valid.mean(axis=1)
+    stds  = feat_valid.std(axis=1)
+    y_pos = np.arange(len(FEATURE_COLS))
+    feat_names = [FEATURE_LABELS[f] for f in FEATURE_COLS]
+    ax_feat.barh(y_pos, means, xerr=stds, color=C_VALID, alpha=0.65,
+                 error_kw={'elinewidth': 1, 'capsize': 3}, label='Mean ± std')
+    for j, sid in enumerate(subjects):
+        ax_feat.scatter(feat_valid[:, j], y_pos, s=18,
+                        color=SUBJECT_COLORS[j], zorder=4, label=sid, marker='D')
+    ax_feat.set_yticks(y_pos)
+    ax_feat.set_yticklabels(feat_names, fontsize=8)
+    ax_feat.set_xlabel('Valid-frame ratio')
+    ax_feat.set_title('Feature completeness', fontsize=11)
+    ax_feat.set_xlim(0, 1.12)
+    ax_feat.axvline(0.5, color='gray', linestyle=':', linewidth=1)
+    ax_feat.legend(loc='lower right', fontsize=7.5)
 
     fig.tight_layout(pad=1.5)
     save_figure(fig, 'task1_data_overview',
-                'Data overview: timeline, duration, class balance, feature completeness')
+                'Data overview: per-subject timelines, duration, class balance, feature completeness')
 
 
 # ── Task 2: 单特征判别力综合图 ─────────────────────────────────────────────────
 
-def task2_feature_discriminability(df):
+def task2_feature_discriminability(df_all, subject_dfs):
     print("\n[Task 2] 单特征判别力综合图...")
-    y = df['contact_label'].values.astype(int)
-    idle_mask    = y == 0
-    contact_mask = y == 1
+    subjects = list(subject_dfs.keys())
+
+    # Per-subject AUROC (5-fold CV within each subject), then cross-subject mean ± std
+    per_subj_auroc = {feat: [] for feat in FEATURE_COLS}
+    for sid, df in subject_dfs.items():
+        y = df['contact_label'].values.astype(int)
+        for feat in FEATURE_COLS:
+            mean_a, _ = compute_auroc_cv(df[feat].values.astype(float), y)
+            per_subj_auroc[feat].append(mean_a)
+
+    # Effect sizes on pooled data
+    y_all = df_all['contact_label'].values.astype(int)
+    idle_mask    = y_all == 0
+    contact_mask = y_all == 1
 
     records = []
     for feat in FEATURE_COLS:
-        col = df[feat].values.astype(float)
-        g_idle    = col[idle_mask]
-        g_contact = col[contact_mask]
-        auroc_mean, auroc_std = compute_auroc_cv(col, y)
-        cd   = cohen_d(g_contact, g_idle)
-        rrb  = rank_biserial_r(g_contact, g_idle)
-        bhat = bhattacharyya_overlap(g_idle, g_contact)
-        pval = mannwhitney_pval(g_idle, g_contact)
+        subj_aurocs = [a for a in per_subj_auroc[feat] if not np.isnan(a)]
+        col = df_all[feat].values.astype(float)
+        cd  = cohen_d(col[contact_mask], col[idle_mask])
         records.append({
-            'feat': feat,
-            'label': FEATURE_LABELS[feat],
-            'auroc': auroc_mean,
-            'auroc_std': auroc_std,
-            'cohens_d': abs(cd) if not np.isnan(cd) else np.nan,
-            'rr': rrb,
-            'bhatt': bhat,
-            'pval': pval,
+            'feat':           feat,
+            'label':          FEATURE_LABELS[feat],
+            'auroc':          np.mean(subj_aurocs) if subj_aurocs else np.nan,
+            'auroc_std':      np.std(subj_aurocs) if len(subj_aurocs) > 1 else 0.0,
+            'cohens_d':       abs(cd) if not np.isnan(cd) else np.nan,
+            'rr':             rank_biserial_r(col[contact_mask], col[idle_mask]),
+            'bhatt':          bhattacharyya_overlap(col[idle_mask], col[contact_mask]),
+            'pval':           mannwhitney_pval(col[idle_mask], col[contact_mask]),
+            'per_subj_auroc': per_subj_auroc[feat],
         })
 
     res = pd.DataFrame(records).sort_values('auroc', ascending=False).reset_index(drop=True)
 
-    fig, axes = plt.subplots(1, 4, figsize=(14, 6))
-    fig.suptitle('Single-feature Discriminability Summary', fontsize=13, fontweight='bold')
+    fig, axes = plt.subplots(1, 4, figsize=(15, 6))
+    fig.suptitle(
+        f'Single-feature Discriminability  '
+        f'(AUROC: mean ± std across {len(subjects)} subjects)',
+        fontsize=13, fontweight='bold'
+    )
     y_pos = np.arange(len(res))
     labels_sorted = res['label'].tolist()
 
-    def hbar_plot(ax, values, errs, xlabel, ref_line=None, panel_lbl=''):
-        colors = [WONG[3] if not np.isnan(v) and v >= 0.7
-                  else WONG[2] if not np.isnan(v) and v >= 0.6
-                  else WONG[6] for v in values]
-        valid  = ~np.isnan(values)
-        bars   = ax.barh(y_pos[valid], values[valid],
-                         xerr=errs[valid] if errs is not None else None,
-                         color=[colors[i] for i in range(len(colors)) if valid[i]],
-                         error_kw={'elinewidth': 1, 'capsize': 2},
-                         height=0.65, align='center')
-        if ref_line is not None:
-            ax.axvline(ref_line, color='gray', linestyle='--', linewidth=1)
-        ax.set_yticks(y_pos)
-        ax.set_yticklabels(labels_sorted, fontsize=8.5)
-        ax.set_xlabel(xlabel)
-        if panel_lbl:
-            add_panel_label(ax, panel_lbl, x=-0.2)
-
-    # AUROC
+    # (a) AUROC — bars + per-subject diamonds
     ax = axes[0]
     add_panel_label(ax, '(a)')
-    aurocs = res['auroc'].values
+    aurocs     = res['auroc'].values
     auroc_stds = res['auroc_std'].values
     valid = ~np.isnan(aurocs)
-    bar_colors_auroc = [WONG[3] if v >= 0.8 else WONG[2] if v >= 0.65 else WONG[6]
-                        for v in aurocs]
+    bar_colors = [WONG[3] if v >= 0.8 else WONG[2] if v >= 0.65 else WONG[6] for v in aurocs]
     ax.barh(y_pos[valid], aurocs[valid], xerr=auroc_stds[valid],
-            color=[bar_colors_auroc[i] for i in range(len(bar_colors_auroc)) if valid[i]],
+            color=[bar_colors[i] for i in range(len(bar_colors)) if valid[i]],
             error_kw={'elinewidth': 1, 'capsize': 2},
             height=0.65, align='center')
+    for i, row in res.iterrows():
+        for j, sa in enumerate(row['per_subj_auroc']):
+            if not np.isnan(sa):
+                ax.scatter(sa, y_pos[i], s=20, color=SUBJECT_COLORS[j],
+                           zorder=4, marker='D')
     ax.axvline(0.5, color='gray', linestyle='--', linewidth=1, label='chance')
-    # Add significance stars
     for i, row in res.iterrows():
         stars = sig_stars(row['pval'])
-        color = 'black' if stars != 'ns' else 'gray'
-        ax.text(0.02, y_pos[i], stars, va='center', ha='left',
-                fontsize=7, color=color, transform=ax.get_yaxis_transform())
+        ax.text(0.02, y_pos[i], stars, va='center', ha='left', fontsize=7,
+                color='black' if stars != 'ns' else 'gray',
+                transform=ax.get_yaxis_transform())
     ax.set_yticks(y_pos)
     ax.set_yticklabels(labels_sorted, fontsize=8.5)
-    ax.set_xlabel("AUROC (5-fold CV)")
-    ax.set_title("AUROC", fontsize=11)
-    ax.set_xlim(0.3, 1.05)
-    ax.legend(fontsize=8)
+    ax.set_xlabel(f'AUROC (5-fold CV, mean±std, N={len(subjects)})')
+    ax.set_title('AUROC', fontsize=11)
+    ax.set_xlim(0.3, 1.12)
+    subject_handles = [mpatches.Patch(color=SUBJECT_COLORS[j], label=sid)
+                       for j, sid in enumerate(subjects)]
+    ax.legend(handles=subject_handles, fontsize=7.5, loc='lower right')
 
-    # Cohen's d
+    # (b) Cohen's d (pooled)
     ax = axes[1]
     add_panel_label(ax, '(b)')
     cd_vals = res['cohens_d'].values
     valid = ~np.isnan(cd_vals)
-    cd_colors = [WONG[3] if v >= 0.8 else WONG[2] if v >= 0.5 else WONG[6]
-                 for v in cd_vals]
+    cd_colors = [WONG[3] if v >= 0.8 else WONG[2] if v >= 0.5 else WONG[6] for v in cd_vals]
     ax.barh(y_pos[valid], cd_vals[valid],
             color=[cd_colors[i] for i in range(len(cd_colors)) if valid[i]],
             height=0.65, align='center')
     ax.set_yticks(y_pos)
     ax.set_yticklabels([''] * len(labels_sorted))
-    ax.set_xlabel("|Cohen's d|")
+    ax.set_xlabel("|Cohen's d| (pooled)")
     ax.set_title("|Cohen's d|", fontsize=11)
 
-    # Rank-biserial r
+    # (c) Rank-biserial r (pooled)
     ax = axes[2]
     add_panel_label(ax, '(c)')
     rr_vals = res['rr'].values
     valid = ~np.isnan(rr_vals)
-    rr_colors = [WONG[6] if v < 0 else WONG[3] if abs(v) >= 0.5 else WONG[2]
-                 for v in rr_vals]
+    rr_colors = [WONG[6] if v < 0 else WONG[3] if abs(v) >= 0.5 else WONG[2] for v in rr_vals]
     ax.barh(y_pos[valid], rr_vals[valid],
             color=[rr_colors[i] for i in range(len(rr_colors)) if valid[i]],
             height=0.65, align='center')
     ax.axvline(0, color='gray', linestyle='--', linewidth=1)
     ax.set_yticks(y_pos)
     ax.set_yticklabels([''] * len(labels_sorted))
-    ax.set_xlabel('Rank-biserial r')
+    ax.set_xlabel('Rank-biserial r (pooled)')
     ax.set_title('Rank-biserial r', fontsize=11)
 
-    # Bhattacharyya overlap
+    # (d) Bhattacharyya overlap (pooled)
     ax = axes[3]
     add_panel_label(ax, '(d)')
     bhat_vals = res['bhatt'].values
     valid = ~np.isnan(bhat_vals)
-    bhat_colors = [WONG[3] if v < 0.4 else WONG[2] if v < 0.7 else WONG[6]
-                   for v in bhat_vals]
+    bhat_colors = [WONG[3] if v < 0.4 else WONG[2] if v < 0.7 else WONG[6] for v in bhat_vals]
     ax.barh(y_pos[valid], bhat_vals[valid],
             color=[bhat_colors[i] for i in range(len(bhat_colors)) if valid[i]],
             height=0.65, align='center')
     ax.set_yticks(y_pos)
     ax.set_yticklabels([''] * len(labels_sorted))
-    ax.set_xlabel('Bhattacharyya overlap')
+    ax.set_xlabel('Bhattacharyya overlap (pooled)')
     ax.set_title('Overlap coeff.', fontsize=11)
     ax.set_xlim(0, 1.1)
 
-    # Legend patches
     legend_patches = [
         mpatches.Patch(color=WONG[3], label='Strong'),
         mpatches.Patch(color=WONG[2], label='Moderate'),
@@ -402,28 +436,26 @@ def task2_feature_discriminability(df):
 
     fig.tight_layout(pad=1.5)
     save_figure(fig, 'task2_feature_discriminability',
-                'Single-feature discriminability: AUROC, Cohen\'s d, rank-biserial r, Bhattacharyya overlap')
+                "Single-feature discriminability: AUROC per-subject mean±std, Cohen's d, rr, Bhattacharyya")
     return res
 
 
 # ── Task 3: 分布 KDE 图 ────────────────────────────────────────────────────────
 
-def task3_kde_top6(df, feat_ranking):
-    print("\n[Task 3] KDE 分布图（AUROC Top 6）...")
-    y = df['contact_label'].values.astype(int)
+def task3_kde_top6(df_all, feat_ranking):
+    print("\n[Task 3] KDE 分布图（AUROC Top 6，汇总数据）...")
+    y = df_all['contact_label'].values.astype(int)
     top6 = feat_ranking.dropna(subset=['auroc']).head(6)['feat'].tolist()
 
     fig, axes = plt.subplots(2, 3, figsize=(13, 8))
-    fig.suptitle('Feature Distributions: IDLE vs CONTACT (AUROC Top 6)',
+    fig.suptitle('Feature Distributions: IDLE vs CONTACT — AUROC Top 6 (pooled)',
                  fontsize=13, fontweight='bold')
     panel_labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)']
 
     for ax, feat, plbl in zip(axes.flat, top6, panel_labels):
-        col = df[feat].values.astype(float)
-        g_idle    = col[y == 0]
-        g_contact = col[y == 1]
-        g_idle    = g_idle[~np.isnan(g_idle)]
-        g_contact = g_contact[~np.isnan(g_contact)]
+        col = df_all[feat].values.astype(float)
+        g_idle    = col[(y == 0) & ~np.isnan(col)]
+        g_contact = col[(y == 1) & ~np.isnan(col)]
 
         auroc_val = feat_ranking.loc[feat_ranking['feat'] == feat, 'auroc'].values
         auroc_val = float(auroc_val[0]) if len(auroc_val) else np.nan
@@ -456,53 +488,57 @@ def task3_kde_top6(df, feat_ranking):
         ax.set_title(FEATURE_LABELS[feat], fontsize=11)
         ax.set_xlabel(feat, fontsize=9)
         ax.set_ylabel('Density')
-        info = f"AUROC={auroc_val:.3f}\n|d|={cd_val:.2f}" if not np.isnan(cd_val) else f"AUROC={auroc_val:.3f}"
+        info = (f"AUROC={auroc_val:.3f}\n|d|={cd_val:.2f}"
+                if not np.isnan(cd_val) else f"AUROC={auroc_val:.3f}")
         ax.text(0.97, 0.97, info, transform=ax.transAxes,
                 ha='right', va='top', fontsize=8.5,
                 bbox=dict(boxstyle='round,pad=0.3', fc='white', alpha=0.8))
         ax.legend(fontsize=8, loc='upper left')
 
-    fig.text(0.5, -0.01, 'Shaded region = overlap area (KDE). Error bars not shown for KDE plots.',
+    fig.text(0.5, -0.01,
+             'Pooled across all subjects. Shaded grey = KDE overlap region.',
              ha='center', fontsize=9, style='italic')
     fig.tight_layout(pad=1.5)
     save_figure(fig, 'task3_kde_top6',
-                'KDE distributions for top-6 AUROC features, overlap filled in grey')
+                'KDE distributions for top-6 AUROC features (pooled), overlap filled grey')
 
 
 # ── Task 4: 时序对齐图 ────────────────────────────────────────────────────────
 
-def task4_temporal_alignment(df):
-    print("\n[Task 4] 时序对齐图（onset ± 20 帧）...")
+def task4_temporal_alignment(df_all):
+    print("\n[Task 4] 时序对齐图（onset ± 20 帧，汇总数据）...")
     TARGET_FEATS = [
         'dist2d_palm_0', 'approach_theta', 'brightness_contact',
         'shadow_score', 'flow_mag', 'v_t',
     ]
     WINDOW = 20
-    labels = df['contact_label'].values.astype(int)
 
-    # Detect onset frames (0→1 transitions)
+    # Detect onsets per subject to avoid cross-subject boundary artifacts
     onsets = []
-    for i in range(1, len(labels)):
-        if labels[i] == 1 and labels[i - 1] == 0:
-            onsets.append(i)
+    for sid in df_all['subject_id'].unique():
+        sid_mask   = (df_all['subject_id'] == sid).values
+        sub_labels = df_all.loc[sid_mask, 'contact_label'].values.astype(int)
+        sub_idx    = np.where(sid_mask)[0]
+        for i in range(1, len(sub_labels)):
+            if sub_labels[i] == 1 and sub_labels[i - 1] == 0:
+                global_i = sub_idx[i]
+                if global_i - WINDOW >= 0 and global_i + WINDOW + 1 <= len(df_all):
+                    onsets.append(global_i)
 
     t_axis = np.arange(-WINDOW, WINDOW + 1)
 
     fig, axes = plt.subplots(2, 3, figsize=(13, 8))
-    fig.suptitle('Temporal Alignment at Contact Onset (t = 0)',
+    fig.suptitle('Temporal Alignment at Contact Onset (t = 0) — pooled across subjects',
                  fontsize=13, fontweight='bold')
     panel_labels = ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)']
 
     for ax, feat, plbl in zip(axes.flat, TARGET_FEATS, panel_labels):
-        col = df[feat].values.astype(float)
+        col = df_all[feat].values.astype(float)
         segments = []
         for onset in onsets:
-            s = onset - WINDOW
-            e = onset + WINDOW + 1
-            if s < 0 or e > len(col):
-                continue
-            seg = col[s:e]
-            segments.append(seg)
+            seg = col[onset - WINDOW: onset + WINDOW + 1]
+            if len(seg) == 2 * WINDOW + 1:
+                segments.append(seg)
 
         if not segments:
             ax.text(0.5, 0.5, 'No onset found', ha='center', va='center',
@@ -523,11 +559,12 @@ def task4_temporal_alignment(df):
         ax.set_ylabel(feat, fontsize=9)
         ax.legend(fontsize=8)
 
-    fig.text(0.5, -0.01, f'N={len(segments)} onset events aligned. Shading = ±1 SEM.',
+    fig.text(0.5, -0.01,
+             f'N={len(onsets)} onset events pooled across subjects. Shading = ±1 SEM.',
              ha='center', fontsize=9, style='italic')
     fig.tight_layout(pad=1.5)
     save_figure(fig, 'task4_temporal_alignment',
-                'Temporal alignment at contact onset ±20 frames, mean ± SEM shaded')
+                'Temporal alignment at contact onset ±20 frames, pooled, mean ± SEM')
 
 
 # ── Task 5: 特征组合消融 ROC ──────────────────────────────────────────────────
@@ -548,7 +585,7 @@ COMBO_COLORS = {k: c for k, c in zip(COMBOS.keys(),
 
 
 def run_cv_combo(df, feats, n_splits=N_FOLDS):
-    """Run StratifiedKFold LR for a feature combo, return ROC and PR curves."""
+    """5-fold LR for a feature combo on a single subject's data."""
     sub = df[feats + ['contact_label']].dropna(subset=feats)
     X = sub[feats].values.astype(float)
     y = sub['contact_label'].values.astype(int)
@@ -557,7 +594,6 @@ def run_cv_combo(df, feats, n_splits=N_FOLDS):
     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
     mean_fpr = np.linspace(0, 1, 300)
     tprs, roc_aucs, pr_aucs = [], [], []
-    all_prec, all_rec = [], []
     for tr, te in skf.split(X, y):
         scaler = StandardScaler()
         Xtr = scaler.fit_transform(X[tr])
@@ -571,31 +607,56 @@ def run_cv_combo(df, feats, n_splits=N_FOLDS):
         roc_aucs.append(auc(fpr, tpr))
         prec, rec, _ = precision_recall_curve(y[te], prob)
         pr_aucs.append(auc(rec, prec))
-    mean_tpr = np.mean(tprs, axis=0)
-    std_tpr  = np.std(tprs, axis=0)
     return {
-        'mean_fpr': mean_fpr,
-        'mean_tpr': mean_tpr,
-        'std_tpr':  std_tpr,
-        'auroc_mean': np.mean(roc_aucs),
-        'auroc_std':  np.std(roc_aucs),
-        'prauc_mean': np.mean(pr_aucs),
-        'prauc_std':  np.std(pr_aucs),
+        'mean_fpr':   mean_fpr,
+        'mean_tpr':   np.mean(tprs, axis=0),
+        'std_tpr':    np.std(tprs,  axis=0),
+        'auroc_mean': float(np.mean(roc_aucs)),
+        'auroc_std':  float(np.std(roc_aucs)),
+        'prauc_mean': float(np.mean(pr_aucs)),
+        'prauc_std':  float(np.std(pr_aucs)),
     }
 
 
-def task5_ablation_roc(df):
-    print("\n[Task 5] 特征组合消融 ROC...")
+def task5_ablation_roc(df_all, subject_dfs):
+    print("\n[Task 5] 特征组合消融 ROC（per-subject → 跨受试者 mean ± std）...")
+    subjects = list(subject_dfs.keys())
+
+    per_subj = {name: [] for name in COMBOS}
+    for sid, df in subject_dfs.items():
+        for name, feats in COMBOS.items():
+            res = run_cv_combo(df, feats)
+            if res is not None:
+                per_subj[name].append(res)
+
+    mean_fpr = np.linspace(0, 1, 300)
     results = {}
-    for name, feats in COMBOS.items():
-        res = run_cv_combo(df, feats)
-        if res is not None:
-            results[name] = res
-            print(f"  {name:15s}  AUROC={res['auroc_mean']:.3f}±{res['auroc_std']:.3f}  "
-                  f"PR-AUC={res['prauc_mean']:.3f}±{res['prauc_std']:.3f}")
+    for name in COMBOS:
+        subj_res = per_subj[name]
+        if not subj_res:
+            continue
+        all_tprs       = [r['mean_tpr']   for r in subj_res]
+        auroc_per_subj = [r['auroc_mean'] for r in subj_res]
+        prauc_per_subj = [r['prauc_mean'] for r in subj_res]
+        results[name] = {
+            'mean_fpr':       mean_fpr,
+            'mean_tpr':       np.mean(all_tprs, axis=0),
+            'std_tpr':        np.std(all_tprs,  axis=0),
+            'auroc_mean':     float(np.mean(auroc_per_subj)),
+            'auroc_std':      float(np.std(auroc_per_subj)),
+            'prauc_mean':     float(np.mean(prauc_per_subj)),
+            'prauc_std':      float(np.std(prauc_per_subj)),
+            'auroc_per_subj': auroc_per_subj,
+            'prauc_per_subj': prauc_per_subj,
+        }
+        print(f"  {name:15s}  AUROC={results[name]['auroc_mean']:.3f}±{results[name]['auroc_std']:.3f}  "
+              f"PR-AUC={results[name]['prauc_mean']:.3f}±{results[name]['prauc_std']:.3f}")
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-    fig.suptitle('Feature Combination Ablation', fontsize=13, fontweight='bold')
+    fig.suptitle(
+        f'Feature Combination Ablation  (mean ± std across {len(subjects)} subjects)',
+        fontsize=13, fontweight='bold'
+    )
 
     # ROC curves
     ax = axes[0]
@@ -603,286 +664,270 @@ def task5_ablation_roc(df):
     ax.plot([0, 1], [0, 1], 'k--', linewidth=0.8, label='Chance')
     for name, res in results.items():
         c = COMBO_COLORS[name]
-        ax.plot(res['mean_fpr'], res['mean_tpr'],
-                color=c, linewidth=1.8,
-                label=f"{name} ({res['auroc_mean']:.3f})")
+        ax.plot(res['mean_fpr'], res['mean_tpr'], color=c, linewidth=1.8,
+                label=f"{name} ({res['auroc_mean']:.3f}±{res['auroc_std']:.3f})")
         ax.fill_between(res['mean_fpr'],
-                         res['mean_tpr'] - res['std_tpr'],
-                         res['mean_tpr'] + res['std_tpr'],
-                         alpha=0.12, color=c)
+                        res['mean_tpr'] - res['std_tpr'],
+                        res['mean_tpr'] + res['std_tpr'],
+                        alpha=0.12, color=c)
     ax.set_xlabel('False Positive Rate')
     ax.set_ylabel('True Positive Rate')
-    ax.set_title('ROC Curves (5-fold CV)', fontsize=11)
-    ax.legend(fontsize=7.5, loc='lower right')
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1.02)
+    ax.set_title('ROC Curves (cross-subject mean ± std)', fontsize=11)
+    ax.legend(fontsize=7, loc='lower right')
+    ax.set_xlim(0, 1); ax.set_ylim(0, 1.02)
 
-    # AUROC bar chart
-    ax = axes[1]
-    add_panel_label(ax, '(b)')
-    names  = list(results.keys())
-    aurocs = [results[n]['auroc_mean'] for n in names]
-    auroc_stds = [results[n]['auroc_std'] for n in names]
-    colors = [COMBO_COLORS[n] for n in names]
-    bars   = ax.bar(names, aurocs, yerr=auroc_stds,
-                    color=colors, edgecolor='white',
-                    error_kw={'elinewidth': 1.2, 'capsize': 3})
-    ax.axhline(0.85, color='gray', linestyle=':', linewidth=1.2, label='0.85 threshold')
-    for bar, v, e in zip(bars, aurocs, auroc_stds):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + e + 0.005,
-                f'{v:.3f}', ha='center', va='bottom', fontsize=8)
-    ax.set_ylabel('AUROC')
-    ax.set_title('AUROC (5-fold CV ± std)', fontsize=11)
-    ax.set_ylim(0, 1.12)
-    ax.legend(fontsize=8)
-    ax.set_xticklabels(names, rotation=30, ha='right', fontsize=8)
+    def _ablation_bar(ax, names, means, stds, per_subj_scores, ylabel, title, panel_lbl):
+        add_panel_label(ax, panel_lbl)
+        colors = [COMBO_COLORS[n] for n in names]
+        bars   = ax.bar(names, means, yerr=stds, color=colors, edgecolor='white',
+                        error_kw={'elinewidth': 1.2, 'capsize': 3})
+        for xi, scores in enumerate(per_subj_scores):
+            for j, score in enumerate(scores):
+                ax.scatter(xi, score, s=25, color=SUBJECT_COLORS[j], zorder=4, marker='D')
+        ax.axhline(0.85, color='gray', linestyle=':', linewidth=1.2, label='0.85')
+        for bar, v, e in zip(bars, means, stds):
+            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + e + 0.005,
+                    f'{v:.3f}', ha='center', va='bottom', fontsize=8)
+        ax.set_ylabel(ylabel)
+        ax.set_title(title, fontsize=11)
+        ax.set_ylim(0, 1.12)
+        ax.legend(fontsize=8)
+        ax.set_xticklabels(names, rotation=30, ha='right', fontsize=8)
 
-    # PR-AUC bar chart
-    ax = axes[2]
-    add_panel_label(ax, '(c)')
-    praucs      = [results[n]['prauc_mean'] for n in names]
-    prauc_stds  = [results[n]['prauc_std'] for n in names]
-    bars        = ax.bar(names, praucs, yerr=prauc_stds,
-                         color=colors, edgecolor='white',
-                         error_kw={'elinewidth': 1.2, 'capsize': 3})
-    ax.axhline(0.85, color='gray', linestyle=':', linewidth=1.2, label='0.85 threshold')
-    for bar, v, e in zip(bars, praucs, prauc_stds):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + e + 0.005,
-                f'{v:.3f}', ha='center', va='bottom', fontsize=8)
-    ax.set_ylabel('PR-AUC')
-    ax.set_title('PR-AUC (5-fold CV ± std)', fontsize=11)
-    ax.set_ylim(0, 1.12)
-    ax.legend(fontsize=8)
-    ax.set_xticklabels(names, rotation=30, ha='right', fontsize=8)
+    names = list(results.keys())
+    _ablation_bar(axes[1], names,
+                  [results[n]['auroc_mean'] for n in names],
+                  [results[n]['auroc_std']  for n in names],
+                  [results[n]['auroc_per_subj'] for n in names],
+                  'AUROC', 'AUROC (cross-subject mean ± std)', '(b)')
+    _ablation_bar(axes[2], names,
+                  [results[n]['prauc_mean'] for n in names],
+                  [results[n]['prauc_std']  for n in names],
+                  [results[n]['prauc_per_subj'] for n in names],
+                  'PR-AUC', 'PR-AUC (cross-subject mean ± std)', '(c)')
 
+    subject_handles = [mpatches.Patch(color=SUBJECT_COLORS[j], label=sid)
+                       for j, sid in enumerate(subjects)]
+    fig.legend(handles=subject_handles, loc='lower center', ncol=len(subjects),
+               fontsize=9, bbox_to_anchor=(0.5, -0.07))
     fig.text(0.5, -0.03,
-             'Error bars = ±1 std across folds. Dashed line = 0.85 decision threshold.',
+             f'Error bars = ±1 std across {len(subjects)} subjects. '
+             'Diamonds = individual subject scores. Dotted line = 0.85 threshold.',
              ha='center', fontsize=9, style='italic')
     fig.tight_layout(pad=1.5)
     save_figure(fig, 'task5_ablation_roc',
-                'Ablation study: ROC curves and AUROC/PR-AUC comparison across feature combos')
+                'Ablation: ROC + AUROC/PR-AUC cross-subject mean ± std')
     return results
 
 
 # ── Task 6: 错误分析 violin plot ─────────────────────────────────────────────
 
-def task6_error_analysis(df, ablation_results):
-    print("\n[Task 6] 错误分析 violin plot...")
+def task6_error_analysis(df_all, ablation_results, subject_dfs):
+    print("\n[Task 6] 错误分析 violin plot（per-subject CV，汇总错误）...")
     best_combo_name = 'all_fusion'
     best_feats      = COMBOS[best_combo_name]
+    subjects = list(subject_dfs.keys())
 
-    sub = df[best_feats + ['contact_label']].dropna(subset=best_feats)
-    X   = sub[best_feats].values.astype(float)
-    y   = sub['contact_label'].values.astype(int)
-
-    skf    = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
-    preds  = np.full(len(y), np.nan)
-
-    for tr, te in skf.split(X, y):
-        scaler = StandardScaler()
-        Xtr    = scaler.fit_transform(X[tr])
-        Xte    = scaler.transform(X[te])
-        lr     = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE,
+    all_X, all_y, all_preds = [], [], []
+    for sid, df in subject_dfs.items():
+        sub = df[best_feats + ['contact_label']].dropna(subset=best_feats)
+        X   = sub[best_feats].values.astype(float)
+        y   = sub['contact_label'].values.astype(int)
+        if len(np.unique(y)) < 2 or len(y) < N_FOLDS * 2:
+            continue
+        skf   = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
+        preds = np.full(len(y), np.nan)
+        for tr, te in skf.split(X, y):
+            scaler = StandardScaler()
+            lr = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE,
                                     class_weight='balanced')
-        lr.fit(Xtr, y[tr])
-        preds[te] = lr.predict(Xte)
+            lr.fit(scaler.fit_transform(X[tr]), y[tr])
+            preds[te] = lr.predict(scaler.transform(X[te]))
+        all_X.append(X); all_y.append(y); all_preds.append(preds)
 
-    idx_correct = np.where(preds == y)[0]
-    idx_error   = np.where(preds != y)[0]
-    idx_fp      = np.where((preds == 1) & (y == 0))[0]
-    idx_fn      = np.where((preds == 0) & (y == 1))[0]
+    X_pool     = np.vstack(all_X)
+    y_pool     = np.concatenate(all_y)
+    preds_pool = np.concatenate(all_preds)
 
-    print(f"  Correct: {len(idx_correct)}  Error: {len(idx_error)}  "
-          f"FP: {len(idx_fp)}  FN: {len(idx_fn)}")
+    idx_correct = np.where(preds_pool == y_pool)[0]
+    idx_fp      = np.where((preds_pool == 1) & (y_pool == 0))[0]
+    idx_fn      = np.where((preds_pool == 0) & (y_pool == 1))[0]
+    print(f"  Correct: {len(idx_correct)}  FP: {len(idx_fp)}  FN: {len(idx_fn)}")
 
     ANALYSIS_FEATS = ['dist2d_palm_0', 'approach_theta', 'brightness_contact']
     fig, axes = plt.subplots(1, 3, figsize=(13, 6))
     fig.suptitle(
-        f'Error Analysis: {best_combo_name} — Correct vs Error Frames (FP+FN)',
+        f'Error Analysis: {best_combo_name} — Correct vs FP vs FN\n'
+        f'(predictions pooled across {len(subjects)} subjects)',
         fontsize=13, fontweight='bold'
     )
-    panel_labels = ['(a)', '(b)', '(c)']
 
-    for ax, feat, plbl in zip(axes, ANALYSIS_FEATS, panel_labels):
+    for ax, feat, plbl in zip(axes, ANALYSIS_FEATS, ['(a)', '(b)', '(c)']):
         feat_idx = best_feats.index(feat)
-        val_correct = X[idx_correct, feat_idx]
-        val_fp      = X[idx_fp,      feat_idx]
-        val_fn      = X[idx_fn,      feat_idx]
-
-        groups   = []
-        grp_vals = []
-        for grp_label, vals in [('Correct', val_correct),
-                                  ('FP', val_fp),
-                                  ('FN', val_fn)]:
+        groups, grp_vals = [], []
+        for grp_label, idx in [('Correct', idx_correct), ('FP', idx_fp), ('FN', idx_fn)]:
+            vals = X_pool[idx, feat_idx]
             vals = vals[~np.isnan(vals)]
             if len(vals) > 0:
                 groups.append(grp_label)
                 grp_vals.append(vals)
 
-        data_for_violin = pd.DataFrame({
+        data_violin = pd.DataFrame({
             'value': np.concatenate(grp_vals),
             'group': np.concatenate([[g] * len(v) for g, v in zip(groups, grp_vals)])
         })
-
         group_order = [g for g in ['Correct', 'FP', 'FN'] if g in groups]
         palette = {'Correct': WONG[3], 'FP': WONG[6], 'FN': WONG[1]}
 
-        sns.violinplot(data=data_for_violin, x='group', y='value',
+        sns.violinplot(data=data_violin, x='group', y='value',
                        order=group_order, palette=palette,
                        inner='box', ax=ax, cut=0, linewidth=1)
         add_panel_label(ax, plbl)
         ax.set_title(FEATURE_LABELS.get(feat, feat), fontsize=11)
         ax.set_xlabel('')
         ax.set_ylabel(feat, fontsize=9)
-
-        # Annotate n counts
         for xi, grp in enumerate(group_order):
-            n = len(data_for_violin[data_for_violin['group'] == grp])
-            ymax = data_for_violin[data_for_violin['group'] == grp]['value'].max()
+            n    = int((data_violin['group'] == grp).sum())
+            ymax = data_violin.loc[data_violin['group'] == grp, 'value'].max()
             ax.text(xi, ymax, f'n={n}', ha='center', va='bottom', fontsize=8)
 
     fig.text(0.5, -0.03,
-             'FP = false positives (predicted CONTACT, true IDLE). '
-             'FN = false negatives (predicted IDLE, true CONTACT). '
-             'Box = IQR, whisker = 1.5×IQR.',
-             ha='center', fontsize=9, style='italic', wrap=True)
+             'FP = predicted CONTACT / true IDLE. FN = predicted IDLE / true CONTACT. '
+             'Pooled across all subjects. Box = IQR, whisker = 1.5×IQR.',
+             ha='center', fontsize=9, style='italic')
     fig.tight_layout(pad=1.5)
     save_figure(fig, 'task6_error_analysis',
-                'Error analysis violin plots: correct vs FP vs FN frames on key features')
+                'Error analysis violin plots: correct vs FP vs FN (pooled subjects)')
 
 
 # ── Task 7: 填0 vs NaN 处理方式 AUROC 对比验证 ───────────────────────────────
 
 APPEARANCE_FEATS = ['shadow_score', 'flow_mag', 'brightness_contact']
 
-# 检测丢失的代理：write_lm 未检测到时，lm_8_x/y 均为 0（与 triple-zero、dist2d NaN 完全一致）
+
 def _detect_lost_mask(df):
     return (df['lm_8_x'] == 0) & (df['lm_8_y'] == 0)
 
 
 def _auroc_single_feat(col_values, y, n_splits=N_FOLDS):
-    """Per-feature AUROC，返回 (mean, std, n_valid)；col可含NaN，自动过滤。"""
-    valid = ~np.isnan(col_values)
+    valid   = ~np.isnan(col_values)
     n_valid = int(valid.sum())
     if n_valid < 20 or len(np.unique(y[valid])) < 2:
         return np.nan, np.nan, n_valid
     X_v = col_values[valid].reshape(-1, 1)
     y_v = y[valid]
-    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
+    skf  = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=RANDOM_STATE)
     aucs = []
     for tr, te in skf.split(X_v, y_v):
         scaler = StandardScaler()
-        Xtr = scaler.fit_transform(X_v[tr])
-        Xte = scaler.transform(X_v[te])
         lr = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)
-        lr.fit(Xtr, y_v[tr])
-        prob = lr.predict_proba(Xte)[:, 1]
+        lr.fit(scaler.fit_transform(X_v[tr]), y_v[tr])
+        prob = lr.predict_proba(scaler.transform(X_v[te]))[:, 1]
         fpr, tpr, _ = roc_curve(y_v[te], prob)
         aucs.append(auc(fpr, tpr))
     return float(np.mean(aucs)), float(np.std(aucs)), n_valid
 
 
-def task7_zero_vs_nan(df):
-    print("\n[Task 7] 填0 vs NaN 处理方式 AUROC 对比验证...")
+def task7_zero_vs_nan(df_all, subject_dfs):
+    print("\n[Task 7] 填0 vs NaN 处理方式 AUROC 对比验证（per-subject → 跨受试者汇总）...")
+    subjects = list(subject_dfs.keys())
 
-    y_all  = df['contact_label'].values.astype(int)
-    lost   = _detect_lost_mask(df).values          # True = 检测丢失
-    n_lost = int(lost.sum())
-    n_valid_frames = int((~lost).sum())
-
-    print(f"  检测丢失帧: {n_lost}  有效帧: {n_valid_frames}  共: {len(df)}")
+    per_subj_records = {feat: [] for feat in APPEARANCE_FEATS}
+    for sid, df in subject_dfs.items():
+        y_s  = df['contact_label'].values.astype(int)
+        lost = _detect_lost_mask(df).values
+        for feat in APPEARANCE_FEATS:
+            col_raw = df[feat].values.astype(float)
+            az, sz, nz = _auroc_single_feat(col_raw, y_s)
+            col_nan = col_raw.copy(); col_nan[lost] = np.nan
+            an, sn, nn = _auroc_single_feat(col_nan, y_s)
+            delta = an - az if not (np.isnan(an) or np.isnan(az)) else np.nan
+            per_subj_records[feat].append({
+                'sid': sid,
+                'auroc_zero': az, 'std_zero': sz, 'n_zero': nz,
+                'auroc_nan':  an, 'std_nan':  sn, 'n_nan':  nn,
+                'delta': delta,
+            })
 
     records = []
-    roc_curves = {}   # feat -> {zero: {...}, nan_: {...}}
-
     for feat in APPEARANCE_FEATS:
-        col_raw = df[feat].values.astype(float)
-
-        # ── 方式1：填0（当前做法，直接使用原始列）──────────────────────────
-        auroc_zero, std_zero, n_zero = _auroc_single_feat(col_raw, y_all)
-
-        # ── 方式2：填NaN，只在有效帧子集评估 ─────────────────────────────
-        col_nan = col_raw.copy()
-        col_nan[lost] = np.nan
-        # y 无需改变，_auroc_single_feat 内部自动 dropna
-        auroc_nan, std_nan, n_nan = _auroc_single_feat(col_nan, y_all)
-
-        delta = auroc_nan - auroc_zero if not (np.isnan(auroc_nan) or np.isnan(auroc_zero)) else np.nan
-
-        print(f"  {feat:25s}  zero={auroc_zero:.3f}±{std_zero:.3f} (n={n_zero})  "
-              f"NaN={auroc_nan:.3f}±{std_nan:.3f} (n={n_nan})  Δ={delta:+.3f}")
-
+        recs  = per_subj_records[feat]
+        zeros = [r['auroc_zero'] for r in recs if not np.isnan(r['auroc_zero'])]
+        nans  = [r['auroc_nan']  for r in recs if not np.isnan(r['auroc_nan'])]
+        dels  = [r['delta']      for r in recs if not np.isnan(r['delta'])]
         records.append({
-            'feat': feat,
-            'label': FEATURE_LABELS[feat],
-            'auroc_zero': auroc_zero, 'std_zero': std_zero, 'n_zero': n_zero,
-            'auroc_nan':  auroc_nan,  'std_nan':  std_nan,  'n_nan':  n_nan,
-            'delta': delta,
+            'feat':            feat,
+            'label':           FEATURE_LABELS[feat],
+            'auroc_zero_mean': np.mean(zeros), 'auroc_zero_std': np.std(zeros),
+            'auroc_nan_mean':  np.mean(nans),  'auroc_nan_std':  np.std(nans),
+            'delta_mean':      np.mean(dels),  'delta_std':      np.std(dels),
+            'per_subj':        recs,
         })
-
-        # 保存完整 ROC 曲线数据（all frames & valid-only）用于绘图
-        mean_fpr = np.linspace(0, 1, 300)
-
-        def _fold_roc(col, y):
-            valid = ~np.isnan(col)
-            Xv, yv = col[valid].reshape(-1, 1), y[valid]
-            if len(np.unique(yv)) < 2:
-                return None
-            skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
-            tprs, aucs_ = [], []
-            for tr, te in skf.split(Xv, yv):
-                sc = StandardScaler()
-                lr = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)
-                lr.fit(sc.fit_transform(Xv[tr]), yv[tr])
-                prob = lr.predict_proba(sc.transform(Xv[te]))[:, 1]
-                fpr, tpr, _ = roc_curve(yv[te], prob)
-                tprs.append(np.interp(mean_fpr, fpr, tpr))
-                aucs_.append(auc(fpr, tpr))
-            return {'mean_tpr': np.mean(tprs, axis=0),
-                    'std_tpr':  np.std(tprs,  axis=0),
-                    'auroc':    np.mean(aucs_)}
-
-        roc_curves[feat] = {
-            'zero': _fold_roc(col_raw, y_all),
-            'nan_': _fold_roc(col_nan, y_all),
-        }
+        print(f"  {feat:25s}  zero={np.mean(zeros):.3f}±{np.std(zeros):.3f}  "
+              f"NaN={np.mean(nans):.3f}±{np.std(nans):.3f}  "
+              f"Δ={np.mean(dels):+.3f}±{np.std(dels):.3f}")
 
     res = pd.DataFrame(records)
 
-    # ── 绘图：3列（每特征一列） × 2行（ROC曲线 + AUROC条形） ───────────────
+    # ROC curves on pooled data for visual reference
+    mean_fpr = np.linspace(0, 1, 300)
+    y_all    = df_all['contact_label'].values.astype(int)
+    lost_all = _detect_lost_mask(df_all).values
+
+    def _fold_roc_pooled(col, y):
+        valid = ~np.isnan(col)
+        Xv, yv = col[valid].reshape(-1, 1), y[valid]
+        if len(np.unique(yv)) < 2:
+            return None
+        skf = StratifiedKFold(n_splits=N_FOLDS, shuffle=True, random_state=RANDOM_STATE)
+        tprs, aucs_ = [], []
+        for tr, te in skf.split(Xv, yv):
+            sc = StandardScaler()
+            lr = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)
+            lr.fit(sc.fit_transform(Xv[tr]), yv[tr])
+            prob = lr.predict_proba(sc.transform(Xv[te]))[:, 1]
+            fpr, tpr, _ = roc_curve(yv[te], prob)
+            tprs.append(np.interp(mean_fpr, fpr, tpr))
+            aucs_.append(auc(fpr, tpr))
+        return {'mean_tpr': np.mean(tprs, axis=0),
+                'std_tpr':  np.std(tprs,  axis=0),
+                'auroc':    float(np.mean(aucs_))}
+
+    roc_curves = {}
+    for feat in APPEARANCE_FEATS:
+        col_raw = df_all[feat].values.astype(float)
+        col_nan = col_raw.copy(); col_nan[lost_all] = np.nan
+        roc_curves[feat] = {
+            'zero': _fold_roc_pooled(col_raw, y_all),
+            'nan_': _fold_roc_pooled(col_nan, y_all),
+        }
+
+    C_ZERO = WONG[2]; C_NAN_ = WONG[6]
+
     fig = plt.figure(figsize=(13, 9))
     fig.suptitle(
-        'Validation: Zero-fill vs NaN-mask for Appearance Features\n'
-        '(shadow_score, flow_mag, brightness_contact)',
+        f'Validation: Zero-fill vs NaN-mask for Appearance Features\n'
+        f'(mean ± std across {len(subjects)} subjects)',
         fontsize=13, fontweight='bold'
     )
-
     gs = fig.add_gridspec(3, 3, hspace=0.55, wspace=0.35)
-
-    panel_labels = [['(a)', '(b)', '(c)'],
-                    ['(d)', '(e)', '(f)'],
-                    ['(g)', '(h)', '(i)']]
-
-    C_ZERO = WONG[2]   # blue  → 填0
-    C_NAN  = WONG[6]   # red   → NaN
+    panel_labels = [['(a)', '(b)', '(c)'], ['(d)', '(e)', '(f)'], ['(g)', '(h)', '(i)']]
 
     for col_i, feat in enumerate(APPEARANCE_FEATS):
         label  = FEATURE_LABELS[feat]
         rec    = res[res['feat'] == feat].iloc[0]
         curves = roc_curves[feat]
 
-        # Row 0: ROC 曲线对比
+        # Row 0: ROC curves (pooled, for reference)
         ax_roc = fig.add_subplot(gs[0, col_i])
         ax_roc.plot([0, 1], [0, 1], 'k--', linewidth=0.8, label='Chance')
-        for key, color, lbl in [('zero', C_ZERO, 'Zero-fill'),
-                                  ('nan_', C_NAN,  'NaN-mask')]:
+        for key, color, lbl in [('zero', C_ZERO, 'Zero-fill'), ('nan_', C_NAN_, 'NaN-mask')]:
             c = curves[key]
             if c is None:
                 continue
-            ax_roc.plot(mean_fpr := np.linspace(0, 1, 300),
-                        c['mean_tpr'], color=color, linewidth=1.8,
+            ax_roc.plot(mean_fpr, c['mean_tpr'], color=color, linewidth=1.8,
                         label=f"{lbl} ({c['auroc']:.3f})")
-            ax_roc.fill_between(np.linspace(0, 1, 300),
+            ax_roc.fill_between(mean_fpr,
                                 c['mean_tpr'] - c['std_tpr'],
                                 c['mean_tpr'] + c['std_tpr'],
                                 alpha=0.18, color=color)
@@ -892,65 +937,84 @@ def task7_zero_vs_nan(df):
         ax_roc.legend(fontsize=7.5, loc='lower right')
         add_panel_label(ax_roc, panel_labels[0][col_i])
 
-        # Row 1: AUROC 条形对比（双柱，带误差棒）
+        # Row 1: AUROC bars (cross-subject mean ± std) + per-subject diamonds
         ax_bar = fig.add_subplot(gs[1, col_i])
         methods = ['Zero-fill\n(all frames)', 'NaN-mask\n(valid only)']
-        aurocs_ = [rec['auroc_zero'], rec['auroc_nan']]
-        stds_   = [rec['std_zero'],   rec['std_nan']]
-        ns_     = [rec['n_zero'],     rec['n_nan']]
+        aurocs_ = [rec['auroc_zero_mean'], rec['auroc_nan_mean']]
+        stds_   = [rec['auroc_zero_std'],  rec['auroc_nan_std']]
         bars_   = ax_bar.bar(methods, aurocs_, yerr=stds_,
-                             color=[C_ZERO, C_NAN], edgecolor='white', width=0.5,
+                             color=[C_ZERO, C_NAN_], edgecolor='white', width=0.5,
                              error_kw={'elinewidth': 1.2, 'capsize': 4})
+        for j, subj_rec in enumerate(rec['per_subj']):
+            ax_bar.scatter([0, 1],
+                           [subj_rec['auroc_zero'], subj_rec['auroc_nan']],
+                           s=22, color=SUBJECT_COLORS[j], zorder=4, marker='D',
+                           label=subj_rec['sid'] if col_i == 0 else None)
         ax_bar.axhline(0.5, color='gray', linestyle='--', linewidth=1)
-        for bar_, v_, e_, n_ in zip(bars_, aurocs_, stds_, ns_):
-            if np.isnan(v_): continue
+        for bar_, v_, e_ in zip(bars_, aurocs_, stds_):
+            if np.isnan(v_):
+                continue
             ax_bar.text(bar_.get_x() + bar_.get_width() / 2,
-                        v_ + e_ + 0.015,
-                        f'{v_:.3f}\n(n={n_})',
+                        v_ + e_ + 0.015, f'{v_:.3f}',
                         ha='center', va='bottom', fontsize=8)
         ax_bar.set_ylim(0, 1.15)
         ax_bar.set_ylabel('AUROC')
-        ax_bar.set_title(f'AUROC comparison', fontsize=10)
+        ax_bar.set_title('AUROC comparison', fontsize=10)
         add_panel_label(ax_bar, panel_labels[1][col_i])
-
-        # Δ annotation
-        delta_ = rec['delta']
-        if not np.isnan(delta_):
-            clr = WONG[3] if delta_ > 0 else WONG[6]
-            ax_bar.text(0.97, 0.05, f'Δ = {delta_:+.3f}',
+        dm, ds = rec['delta_mean'], rec['delta_std']
+        if not np.isnan(dm):
+            clr = WONG[3] if dm > 0 else WONG[6]
+            ax_bar.text(0.97, 0.05, f'Δ={dm:+.3f}±{ds:.3f}',
                         transform=ax_bar.transAxes, ha='right', va='bottom',
                         fontsize=9, color=clr, fontweight='bold',
                         bbox=dict(boxstyle='round,pad=0.25', fc='white', alpha=0.85))
 
-    # Row 2: 汇总 Δ AUROC 条形图（横向，三特征并排）
+    # Row 2: Summary Δ AUROC bar + per-subject dots
     ax_sum = fig.add_subplot(gs[2, :])
     add_panel_label(ax_sum, '(g)', x=-0.03)
     feat_labels = [FEATURE_LABELS[f] for f in APPEARANCE_FEATS]
-    deltas      = [res[res['feat'] == f]['delta'].values[0] for f in APPEARANCE_FEATS]
-    bar_colors  = [WONG[3] if d > 0 else WONG[6] for d in deltas]
-    bars_sum    = ax_sum.bar(feat_labels, deltas, color=bar_colors, edgecolor='white', width=0.4)
+    delta_means = [res.loc[res['feat'] == f, 'delta_mean'].values[0] for f in APPEARANCE_FEATS]
+    delta_stds  = [res.loc[res['feat'] == f, 'delta_std'].values[0]  for f in APPEARANCE_FEATS]
+    bar_colors  = [WONG[3] if d > 0 else WONG[6] for d in delta_means]
+    bars_sum    = ax_sum.bar(feat_labels, delta_means, yerr=delta_stds,
+                              color=bar_colors, edgecolor='white', width=0.4,
+                              error_kw={'elinewidth': 1.2, 'capsize': 4})
+    for col_i, feat in enumerate(APPEARANCE_FEATS):
+        subj_recs = res.loc[res['feat'] == feat, 'per_subj'].values[0]
+        for j, subj_rec in enumerate(subj_recs):
+            if not np.isnan(subj_rec['delta']):
+                ax_sum.scatter(col_i, subj_rec['delta'], s=28,
+                               color=SUBJECT_COLORS[j], zorder=4, marker='D',
+                               label=subj_rec['sid'] if col_i == 0 else None)
     ax_sum.axhline(0, color='black', linewidth=0.8)
     ax_sum.set_ylabel('Δ AUROC  (NaN-mask − Zero-fill)')
     ax_sum.set_title(
-        'AUROC gain from correcting detection-lost frames: NaN-mask vs Zero-fill',
+        f'AUROC gain: NaN-mask vs Zero-fill  '
+        f'(cross-subject mean ± std, N={len(subjects)})',
         fontsize=11
     )
-    for bar_, d_ in zip(bars_sum, deltas):
-        if np.isnan(d_): continue
+    for bar_, d_, e_ in zip(bars_sum, delta_means, delta_stds):
+        if np.isnan(d_):
+            continue
         va = 'bottom' if d_ >= 0 else 'top'
-        offset = 0.003 if d_ >= 0 else -0.003
         ax_sum.text(bar_.get_x() + bar_.get_width() / 2,
-                    d_ + offset, f'{d_:+.3f}',
-                    ha='center', va=va, fontsize=10, fontweight='bold')
+                    d_ + (0.003 if d_ >= 0 else -0.003),
+                    f'{d_:+.3f}', ha='center', va=va, fontsize=10, fontweight='bold')
 
+    subject_handles = [mpatches.Patch(color=SUBJECT_COLORS[j], label=sid)
+                       for j, sid in enumerate(subjects)]
+    ax_sum.legend(handles=subject_handles, fontsize=8, loc='upper right')
+
+    n_lost_all = int(_detect_lost_mask(df_all).sum())
     fig.text(0.5, -0.02,
-             f'Detection-lost proxy: lm_8_x = lm_8_y = 0 (n={n_lost} frames, {100*n_lost/len(df):.1f}% of total). '
-             f'Zero-fill evaluates all {len(df)} frames; NaN-mask evaluates only {n_valid_frames} valid frames. '
-             f'5-fold StratifiedKFold, random_state=42.',
+             f'Detection-lost proxy: lm_8_x = lm_8_y = 0 '
+             f'(total {n_lost_all} frames, {100*n_lost_all/len(df_all):.1f}%). '
+             'Row 0 ROC on pooled data. Row 1 bars = cross-subject mean ± std. '
+             '5-fold StratifiedKFold, random_state=42.',
              ha='center', fontsize=8.5, style='italic')
 
     save_figure(fig, 'task7_zero_vs_nan',
-                'Validation: AUROC comparison between zero-fill and NaN-mask for appearance features')
+                'Validation: zero-fill vs NaN-mask AUROC, cross-subject mean ± std')
     return res
 
 
@@ -959,22 +1023,28 @@ def task7_zero_vs_nan(df):
 def main():
     print("=" * 60)
     print("  Exp-A Visualization Analysis  (publication quality)")
-    print(f"  Data : {os.path.abspath(DATA_PATH)}")
-    print(f"  Figs : {os.path.abspath(FIG_DIR)}")
+    print(f"  Data dir : {os.path.abspath(DATA_DIR)}")
+    print(f"  Figs dir : {os.path.abspath(FIG_DIR)}")
     print("=" * 60)
 
-    df = load_data()
-    print(f"\n  Loaded {len(df)} frames | "
-          f"IDLE={int((df['contact_label']==0).sum())}  "
-          f"CONTACT={int((df['contact_label']==1).sum())}")
+    df_all, subject_dfs = load_all_subjects()
+    subjects = list(subject_dfs.keys())
+    print(f"\n  Subjects ({len(subjects)}): {subjects}")
+    print(f"  Total frames: {len(df_all)} | "
+          f"IDLE={int((df_all['contact_label']==0).sum())}  "
+          f"CONTACT={int((df_all['contact_label']==1).sum())}")
+    for sid, df in subject_dfs.items():
+        n_idle = int((df['contact_label'] == 0).sum())
+        n_con  = int((df['contact_label'] == 1).sum())
+        print(f"    {sid}: {len(df)} frames | IDLE={n_idle}  CONTACT={n_con}")
 
-    task1_data_overview(df)
-    feat_ranking = task2_feature_discriminability(df)
-    task3_kde_top6(df, feat_ranking)
-    task4_temporal_alignment(df)
-    ablation_results = task5_ablation_roc(df)
-    task6_error_analysis(df, ablation_results)
-    task7_zero_vs_nan(df)
+    task1_data_overview(df_all, subject_dfs)
+    feat_ranking = task2_feature_discriminability(df_all, subject_dfs)
+    task3_kde_top6(df_all, feat_ranking)
+    task4_temporal_alignment(df_all)
+    ablation_results = task5_ablation_roc(df_all, subject_dfs)
+    task6_error_analysis(df_all, ablation_results, subject_dfs)
+    task7_zero_vs_nan(df_all, subject_dfs)
 
     print(f"\n{'='*60}")
     print(f"  All figures saved to: {os.path.abspath(FIG_DIR)}")

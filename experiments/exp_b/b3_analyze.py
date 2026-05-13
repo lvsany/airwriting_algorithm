@@ -91,6 +91,20 @@ COMBOS_WRITING = {
     "geo+optical+vt": ["dist2d_palm_0", "shadow_score", "flow_mag", "brightness_contact", "v_t"],
 }
 
+# ------ 配对受试者（预实验）------
+# Exp-A sid  <->  Exp-B sid（s02=s02, s01=s01）
+SUBJECT_PAIRS = [
+    {"sid_a": "s01", "sid_b": "s01", "label": "S1 (s01)"},
+    {"sid_a": "s02", "sid_b": "s02", "label": "S2 (s02)"},
+]
+KDE_FEATS_PAIRED = ["dist2d_palm_0", "approach_theta", "v_t", "sigma_d", "brightness_contact", "flow_mag"]
+COMBOS_PAIRED = {
+    "geo_wrist":   COMBOS_TRANSFER["geo_wrist"],
+    "geo+theta":   COMBOS_TRANSFER["geo+theta"],
+    "geo+optical": COMBOS_TRANSFER["geo+optical"],
+    "all_fusion":  COMBOS_TRANSFER["all_fusion"],
+}
+
 
 plt.rcParams["font.family"] = "DejaVu Sans"
 plt.rcParams["axes.titlesize"] = 11
@@ -298,7 +312,6 @@ def load_expa(csv_path: str) -> pd.DataFrame:
     """加载 Exp-A 数据。"""
     p = Path(csv_path)
     if not p.exists():
-        # 回退：兼容仓库内多个 data 目录
         candidates = sorted((Path(__file__).resolve().parents[2]).glob("data/**/exp_a1_s01.csv"))
         if not candidates:
             raise FileNotFoundError(f"Exp-A CSV 不存在：{csv_path}")
@@ -312,6 +325,27 @@ def load_expa(csv_path: str) -> pd.DataFrame:
     df["speed"] = "normal"
     df["source_file"] = p.name
     return df
+
+
+def load_expa_all(data_dir: str) -> Dict[str, pd.DataFrame]:
+    """扫描 data_dir/exp_a1_s*.csv，返回 {sid: df} 字典。"""
+    import glob as _glob
+    files = sorted(_glob.glob(str(Path(data_dir) / "exp_a1_s*.csv")))
+    if not files:
+        raise FileNotFoundError(f"未找到 Exp-A CSV：{data_dir}/exp_a1_s*.csv")
+    out: Dict[str, pd.DataFrame] = {}
+    for f in files:
+        m = re.match(r".*exp_a1_(s\d+)\.csv$", f)
+        if not m:
+            continue
+        sid = m.group(1)
+        df = pd.read_csv(f)
+        df = _ensure_label_numeric(df)
+        df["sid"] = sid
+        df["source_file"] = Path(f).name
+        out[sid] = df
+        print(f"  [Exp-A] {sid}: {len(df)} frames")
+    return out
 
 
 def get_valid_subset(df: pd.DataFrame, features: Sequence[str]):
@@ -1285,6 +1319,282 @@ def plot_taskB8(df_b, save_dir):
 
 
 # =========================
+# 配对分析（Task P5/P6/P7）
+# =========================
+
+def _fast_auroc(df: pd.DataFrame, feat: str) -> float:
+    """直接 roc_auc_score（不做 CV），确保返回 >= 0.5 方向。"""
+    sub = df[["contact_label", feat]].copy()
+    sub["contact_label"] = pd.to_numeric(sub["contact_label"], errors="coerce")
+    sub[feat] = pd.to_numeric(sub[feat], errors="coerce")
+    sub = sub[sub["contact_label"].isin([0, 1])].dropna(subset=[feat])
+    if len(sub) < 10 or sub["contact_label"].nunique() < 2:
+        return np.nan
+    try:
+        auc = roc_auc_score(sub["contact_label"].astype(int), sub[feat])
+        return float(max(auc, 1.0 - auc))
+    except Exception:
+        return np.nan
+
+
+def _zero_shot(df_a: pd.DataFrame, df_b: pd.DataFrame, features: List[str]) -> float:
+    """Train on A, test on B — 直接返回 AUROC。"""
+    def _prep(df):
+        sub = df[["contact_label", *features]].copy()
+        sub["contact_label"] = pd.to_numeric(sub["contact_label"], errors="coerce")
+        for f in features:
+            sub[f] = pd.to_numeric(sub[f], errors="coerce")
+        sub = sub.replace([np.inf, -np.inf], np.nan)
+        return sub[sub["contact_label"].isin([0, 1])].dropna(subset=features)
+
+    a_sub = _prep(df_a)
+    b_sub = _prep(df_b)
+    if len(a_sub) < 20 or len(b_sub) < 20:
+        return np.nan
+    if a_sub["contact_label"].nunique() < 2 or b_sub["contact_label"].nunique() < 2:
+        return np.nan
+    scaler = StandardScaler()
+    Xa = scaler.fit_transform(a_sub[list(features)].to_numpy(float))
+    Xb = scaler.transform(b_sub[list(features)].to_numpy(float))
+    ya = a_sub["contact_label"].to_numpy(int)
+    yb = b_sub["contact_label"].to_numpy(int)
+    clf = LogisticRegression(solver="lbfgs", max_iter=1000, class_weight="balanced", random_state=RANDOM_STATE)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        clf.fit(Xa, ya)
+        prob = clf.predict_proba(Xb)[:, 1]
+    try:
+        return float(roc_auc_score(yb, prob))
+    except Exception:
+        return np.nan
+
+
+def _indomain_cv_auroc(df_b: pd.DataFrame, features: List[str]) -> float:
+    """B 域内 5-fold CV AUROC 均值。"""
+    sub = df_b[["contact_label", *features]].copy()
+    sub["contact_label"] = pd.to_numeric(sub["contact_label"], errors="coerce")
+    for f in features:
+        sub[f] = pd.to_numeric(sub[f], errors="coerce")
+    sub = sub.replace([np.inf, -np.inf], np.nan)
+    sub = sub[sub["contact_label"].isin([0, 1])].dropna(subset=features)
+    if len(sub) < 20 or sub["contact_label"].nunique() < 2:
+        return np.nan
+    X, y = sub[list(features)].to_numpy(float), sub["contact_label"].to_numpy(int)
+    res = run_cv(X, y, combo_name="paired_cv")
+    return _safe_float(res["auroc_mean"])
+
+
+def _build_pairs(df_b: pd.DataFrame, expa_all: Dict[str, pd.DataFrame]) -> List[dict]:
+    """按 SUBJECT_PAIRS 配对 Exp-A/B 受试者数据。"""
+    pairs = []
+    for p in SUBJECT_PAIRS:
+        sid_a, sid_b = p["sid_a"], p["sid_b"]
+        if sid_a not in expa_all:
+            print(f"  [配对] 跳过 {p['label']}：Exp-A {sid_a} 未找到")
+            continue
+        df_b_subj = df_b[df_b["sid"] == sid_b]
+        if len(df_b_subj) == 0:
+            print(f"  [配对] 跳过 {p['label']}：Exp-B {sid_b} 无数据")
+            continue
+        pairs.append({**p, "df_a": expa_all[sid_a], "df_b": df_b_subj.copy()})
+    return pairs
+
+
+# ---------- Fig P5 ----------
+def plot_taskP5_kde_paired(pairs: List[dict], save_dir: Path):
+    """Within-subject KDE：每格 4 条曲线（A-IDLE/A-CONTACT/B-IDLE/B-CONTACT）。"""
+    print("\n========== Task P5: Within-Subject KDE (配对) ==========")
+    from matplotlib.lines import Line2D
+    from matplotlib.patches import Patch as MPatch
+
+    C_A_IDLE    = WONG[5]    # blue solid
+    C_A_CONTACT = WONG[6]    # vermillion solid
+    C_B_IDLE    = "#003f7f"  # dark navy dashed
+    C_B_CONTACT = WONG[1]    # orange dashed
+
+    n_subj = len(pairs)
+    n_feat = len(KDE_FEATS_PAIRED)
+    fig, axes = plt.subplots(n_subj, n_feat, figsize=(3.6 * n_feat, 3.2 * n_subj), squeeze=False)
+    fig.suptitle("Task P5 — Within-Subject Feature Distribution Shift (Tap vs Writing)",
+                 fontsize=13, fontweight="bold", y=1.01)
+
+    for row, pair in enumerate(pairs):
+        df_a_p, df_b_p = pair["df_a"], pair["df_b"]
+        for col, feat in enumerate(KDE_FEATS_PAIRED):
+            ax = axes[row][col]
+            auc_a = _fast_auroc(df_a_p, feat)
+            auc_b = _fast_auroc(df_b_p, feat)
+
+            def _draw(df, lv, color, ls, fill):
+                vals = pd.to_numeric(df.loc[df["contact_label"] == lv, feat], errors="coerce").dropna().values
+                vals = vals[np.isfinite(vals)]
+                if len(vals) < 10:
+                    return
+                lo, hi = np.percentile(vals, 0.5), np.percentile(vals, 99.5)
+                if hi <= lo:
+                    return
+                xg = np.linspace(lo, hi, 300)
+                try:
+                    yg = gaussian_kde(vals, bw_method="scott")(xg)
+                    ax.plot(xg, yg, color=color, ls=ls, lw=1.6)
+                    if fill:
+                        ax.fill_between(xg, yg, alpha=0.12, color=color)
+                except Exception:
+                    pass
+
+            _draw(df_a_p, 0, C_A_IDLE,    "-",  True)
+            _draw(df_a_p, 1, C_A_CONTACT, "-",  True)
+            _draw(df_b_p, 0, C_B_IDLE,    "--", False)
+            _draw(df_b_p, 1, C_B_CONTACT, "--", False)
+
+            ax.set_yticks([])
+            ax.set_xlabel(feat, fontsize=8)
+            if col == 0:
+                ax.set_ylabel(pair["label"], fontsize=10)
+
+            lines = []
+            if np.isfinite(auc_a):
+                lines.append(f"A:{auc_a:.2f}")
+            if np.isfinite(auc_b):
+                lines.append(f"B:{auc_b:.2f}")
+            if np.isfinite(auc_a) and np.isfinite(auc_b):
+                d = auc_b - auc_a
+                lines.append(f"Δ:{d:+.2f}")
+            ax.set_title("\n".join(lines), fontsize=7.5, pad=2)
+
+    legend_handles = [
+        MPatch(facecolor=C_A_IDLE,    label="A  IDLE"),
+        MPatch(facecolor=C_A_CONTACT, label="A  CONTACT"),
+        MPatch(facecolor=C_B_IDLE,    label="B  IDLE"),
+        MPatch(facecolor=C_B_CONTACT, label="B  CONTACT"),
+        Line2D([0], [0], color="gray", ls="-",  lw=1.5, label="Exp-A (solid)"),
+        Line2D([0], [0], color="gray", ls="--", lw=1.5, label="Exp-B (dashed)"),
+    ]
+    fig.legend(handles=legend_handles, loc="lower center", ncol=6,
+               fontsize=8.5, bbox_to_anchor=(0.5, -0.04))
+    fig.tight_layout()
+    _save_fig(fig, save_dir, "task_p5_kde_paired")
+    plt.close(fig)
+    print("=======================================================")
+
+
+# ---------- Fig P6 ----------
+def plot_taskP6_delta_heatmap(pairs: List[dict], save_dir: Path):
+    """Δ AUROC 特征热图（features × subjects），3 子图。"""
+    print("\n========== Task P6: Δ AUROC 热图 ==========")
+    n_subj = len(pairs)
+    subject_labels = [p["label"] for p in pairs]
+
+    auroc_a_mat = np.full((len(FEATURE_COLUMNS), n_subj), np.nan)
+    auroc_b_mat = np.full((len(FEATURE_COLUMNS), n_subj), np.nan)
+    for j, pair in enumerate(pairs):
+        for i, feat in enumerate(FEATURE_COLUMNS):
+            auroc_a_mat[i, j] = _fast_auroc(pair["df_a"], feat)
+            auroc_b_mat[i, j] = _fast_auroc(pair["df_b"], feat)
+            print(f"  {pair['label']} | {feat:<22} A={auroc_a_mat[i,j]:.3f}  B={auroc_b_mat[i,j]:.3f}")
+
+    delta_mat = auroc_b_mat - auroc_a_mat
+    order = np.argsort(np.nanmean(auroc_a_mat, axis=1))[::-1]
+    feat_sorted = [FEATURE_COLUMNS[i] for i in order]
+    a_sorted = auroc_a_mat[order]
+    b_sorted = auroc_b_mat[order]
+    d_sorted = delta_mat[order]
+
+    fig, axes = plt.subplots(1, 3, figsize=(14, 7))
+    fig.suptitle("Task P6 — Per-Feature AUROC Shift: Tap (A) → Writing (B)",
+                 fontsize=13, fontweight="bold")
+
+    def _hm(ax, data, cmap, vmin, vmax, title):
+        im = ax.imshow(data, cmap=cmap, vmin=vmin, vmax=vmax, aspect="auto", interpolation="nearest")
+        ax.set_xticks(range(n_subj))
+        ax.set_xticklabels(subject_labels, fontsize=10)
+        ax.set_yticks(range(len(feat_sorted)))
+        ax.set_yticklabels(feat_sorted, fontsize=9)
+        ax.set_title(title, fontsize=11, pad=8)
+        for r in range(data.shape[0]):
+            for c in range(data.shape[1]):
+                val = data[r, c]
+                txt = "NaN" if np.isnan(val) else f"{val:+.2f}" if "Δ" in title else f"{val:.2f}"
+                norm = 0.5 if np.isnan(val) else (val - vmin) / (vmax - vmin + 1e-9)
+                color = "white" if (norm < 0.3 or norm > 0.75) else "black"
+                ax.text(c, r, txt, ha="center", va="center", fontsize=7.5, color=color)
+        plt.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
+
+    _hm(axes[0], d_sorted, "RdYlGn", -0.4, 0.4, "(a) Δ AUROC  (B − A)")
+    _hm(axes[1], a_sorted, "Blues",   0.4, 1.0, "(b) Exp-A AUROC")
+    _hm(axes[2], b_sorted, "Blues",   0.4, 1.0, "(c) Exp-B AUROC")
+
+    fig.tight_layout()
+    _save_fig(fig, save_dir, "task_p6_delta_heatmap")
+    plt.close(fig)
+    print("===========================================")
+
+
+# ---------- Fig P7 ----------
+def plot_taskP7_transfer_paired(pairs: List[dict], save_dir: Path):
+    """Per-subject: zero-shot A→B AUROC vs B 域内 5-fold CV AUROC。"""
+    print("\n========== Task P7: 配对受试者迁移对比 ==========")
+    combo_names  = list(COMBOS_PAIRED.keys())
+    n_combos     = len(combo_names)
+    n_subj       = len(pairs)
+
+    fig, axes = plt.subplots(1, n_subj, figsize=(5.5 * n_subj, 5.5), sharey=True, squeeze=False)
+    fig.suptitle("Task P7 — Per-Subject Zero-Shot A→B vs In-Domain B 5-fold CV",
+                 fontsize=13, fontweight="bold")
+
+    x    = np.arange(n_combos)
+    bar_w = 0.36
+    C_ZS = WONG[5]
+    C_CV = WONG[1]
+
+    for col, pair in enumerate(pairs):
+        ax = axes[0][col]
+        zs_vals = [_zero_shot(pair["df_a"], pair["df_b"], COMBOS_PAIRED[c]) for c in combo_names]
+        cv_vals = [_indomain_cv_auroc(pair["df_b"], COMBOS_PAIRED[c]) for c in combo_names]
+        print(f"\n  {pair['label']}:")
+        for c, zv, cv in zip(combo_names, zs_vals, cv_vals):
+            gap = cv - zv if (np.isfinite(zv) and np.isfinite(cv)) else np.nan
+            print(f"    {c:<14} zero-shot={zv:.3f}  cv={cv:.3f}  gap={gap:+.3f}" if np.isfinite(gap) else
+                  f"    {c:<14} zero-shot={zv}  cv={cv}")
+
+        b_zs = ax.bar(x - bar_w / 2, zs_vals, bar_w, color=C_ZS, alpha=0.88,
+                      label="A→B zero-shot", zorder=3)
+        b_cv = ax.bar(x + bar_w / 2, cv_vals, bar_w, color=C_CV, alpha=0.88,
+                      label="B in-domain CV", zorder=3)
+
+        for i, (zv, cv) in enumerate(zip(zs_vals, cv_vals)):
+            if not (np.isfinite(zv) and np.isfinite(cv)):
+                continue
+            gap = cv - zv
+            y_top = max(zv, cv) + 0.01
+            ax.annotate("", xy=(x[i], y_top + 0.06), xytext=(x[i], y_top + 0.01),
+                        arrowprops=dict(arrowstyle="->", color="gray", lw=1.2))
+            ax.text(x[i], y_top + 0.065, f"{gap:+.2f}", ha="center", va="bottom",
+                    fontsize=8.5, color="#555555", fontweight="bold")
+
+        for bar in list(b_zs) + list(b_cv):
+            h = bar.get_height()
+            if np.isfinite(h) and h > 0.01:
+                ax.text(bar.get_x() + bar.get_width() / 2, h + 0.004,
+                        f"{h:.2f}", ha="center", va="bottom", fontsize=7)
+
+        ax.set_xticks(x)
+        ax.set_xticklabels(combo_names, rotation=20, ha="right", fontsize=9)
+        ax.set_ylim(0.4, 1.2)
+        ax.axhline(0.5, color="gray", ls=":", lw=0.8)
+        ax.set_title(pair["label"], fontsize=11)
+        ax.set_ylabel("AUROC" if col == 0 else "", fontsize=10)
+        ax.grid(axis="y", alpha=0.3, zorder=0)
+        if col == 0:
+            ax.legend(fontsize=9, loc="upper left")
+
+    fig.tight_layout()
+    _save_fig(fig, save_dir, "task_p7_transfer_paired")
+    plt.close(fig)
+    print("==================================================")
+
+
+# =========================
 # 主流程
 # =========================
 def main():
@@ -1379,6 +1689,29 @@ def main():
         plot_taskB8(df_b, SAVE_DIR)
     except Exception as e:
         print(f"[Task B8] failed: {e}")
+
+    # ---- 配对预实验分析 P5 / P6 / P7 ----
+    try:
+        print("\n====== 加载全部 Exp-A 受试者数据 ======")
+        expa_all = load_expa_all(str(Path("experiments/data/")))
+        pairs = _build_pairs(df_b, expa_all)
+        if not pairs:
+            print("[配对分析] 未找到有效配对，跳过 P5/P6/P7。")
+        else:
+            try:
+                plot_taskP5_kde_paired(pairs, SAVE_DIR)
+            except Exception as e:
+                print(f"[Task P5] failed: {e}")
+            try:
+                plot_taskP6_delta_heatmap(pairs, SAVE_DIR)
+            except Exception as e:
+                print(f"[Task P6] failed: {e}")
+            try:
+                plot_taskP7_transfer_paired(pairs, SAVE_DIR)
+            except Exception as e:
+                print(f"[Task P7] failed: {e}")
+    except Exception as e:
+        print(f"[配对分析] 加载失败: {e}")
 
 
 if __name__ == "__main__":
