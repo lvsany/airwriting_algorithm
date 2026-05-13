@@ -1,9 +1,5 @@
 # Ignore data sets and results
 # Adjust these patterns to match where you store large datasets or outputs
-data/
-data/*
-*/data/
-*/data/*
 
 # Results / output folders
 results/
