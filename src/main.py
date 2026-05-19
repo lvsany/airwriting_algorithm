@@ -106,11 +106,9 @@ def draw_hbar(img, x, y, w, h, ratio, fg_color, bg_color=(50, 50, 58)):
 
 # ─── 手掌平面可视化 ───
 def draw_palm_plane_visualization(frame, detector):
-    """绘制手掌平面多边形和局部坐标轴"""
-    if not hasattr(detector, 'palm_tracker'):
-        return
-    palm_system = detector.palm_tracker.get_current_system()
-    if palm_system is None or detector.palm_lm is None:
+    """绘制手掌平面多边形和局部坐标轴（使用 PalmLocalFrame）"""
+    plf = detector.palm_local_frame
+    if not plf.is_valid or detector.palm_lm is None:
         return
 
     h, w = frame.shape[:2]
@@ -134,15 +132,17 @@ def draw_palm_plane_visualization(frame, detector):
         cv2.circle(frame, pt, 3, C['palm'], -1, cv2.LINE_AA)
 
     # 坐标轴
-    origin = palm_system.origin
+    origin = plf.origin
     o2d = p2d(origin)
     axis_len = 0.08
 
     for axis, color, label in [
-        (palm_system.u_axis, C['axis_x'], 'u'),
-        (palm_system.v_axis, C['axis_y'], 'v'),
-        (palm_system.w_axis, C['axis_z'], 'n'),
+        (plf.u_axis, C['axis_x'], 'u'),
+        (plf.v_axis, C['axis_y'], 'v'),
+        (plf.n_axis, C['axis_z'], 'n'),
     ]:
+        if axis is None:
+            continue
         end = origin + axis * axis_len
         e2d = p2d(end)
         cv2.arrowedLine(frame, o2d, e2d, color, 2, cv2.LINE_AA, tipLength=0.22)
@@ -158,9 +158,9 @@ def draw_debug_info(frame, detector, is_writing, fps, palm_mode=True):
     # 左侧面板
     pw = 260
     panel = frame.copy()
-    rounded_rect(panel, (8, 8), (8 + pw, 250), C['panel'], 10)
+    rounded_rect(panel, (8, 8), (8 + pw, 262), C['panel'], 10)
     cv2.addWeighted(panel, 0.82, frame, 0.18, 0, frame)
-    rounded_rect(frame, (8, 8), (8 + pw, 250), C['panel_edge'], 10, 1)
+    rounded_rect(frame, (8, 8), (8 + pw, 262), C['panel_edge'], 10, 1)
 
     x0 = 22
     y = 32
@@ -174,14 +174,14 @@ def draw_debug_info(frame, detector, is_writing, fps, palm_mode=True):
 
     # FPS
     fps_color = C['writing'] if fps >= 25 else C['hover'] if fps >= 15 else C['warn']
-    put_text(frame, f"FPS", (x0, y), 0.38, C['text_dim'])
+    put_text(frame, "FPS", (x0, y), 0.38, C['text_dim'])
     put_text(frame, f"{fps:.0f}", (x0 + 50, y), 0.42, fps_color, 1)
 
     if palm_mode:
-        # 状态 pill
-        det   = detector.contact_sm
-        state = det.get_state().value
-        ss    = STATE_STYLE.get(state, STATE_STYLE['idle'])
+        hr = detector.hover_result
+        cr = detector.contact_result
+        state_val = cr.state.value if cr else 'idle'
+        ss = STATE_STYLE.get(state_val, STATE_STYLE['idle'])
         pill_x = x0 + 150
         draw_pill(frame, (pill_x + 40, y - 5), 80, 20, ss['color'], 0.7)
         put_text(frame, ss['label'], (pill_x + 12, y), 0.38, (255, 255, 255), 1)
@@ -197,44 +197,44 @@ def draw_debug_info(frame, detector, is_writing, fps, palm_mode=True):
         put_text(frame, rr.upper(), (x0 + 195, y), 0.35, C['accent2'] if rr == 'palm' else C['accent'])
         y += 26
 
-        # 距离 + 评分
+        # Hover 校准阶段 + 进度条
+        phase    = hr.phase    if hr else 'waiting'
+        progress = hr.progress if hr else 0.0
+        phase_color = (C['writing'] if phase == 'ready'
+                       else C['hover'] if phase == 'collecting'
+                       else C['text_dim'])
+        put_text(frame, "Hover", (x0, y), 0.35, C['text_dim'])
+        put_text(frame, phase.upper(), (x0 + 65, y), 0.32, phase_color)
+        draw_hbar(frame, x0 + 148, y - 10, 92, 12, progress, phase_color)
+        y += 26
+
+        # Mahalanobis 距离
         put_text(frame, "Distance", (x0, y), 0.35, C['text_dim'])
-        if detector.dist_palm is not None:
-            d     = detector.dist_palm
-            score = det.get_score()
-            bar_color = C['writing'] if det.is_contact() else C['touch'] if d < 15 else C['hover'] if d < 25 else C['idle']
-            draw_hbar(frame, x0 + 80, y - 10, 140, 12, d / 40.0, bar_color)
-            put_text(frame, f"{d:.0f}mm", (x0 + 82, y), 0.32, (255, 255, 255), 1)
-        else:
-            put_text(frame, "OUT", (x0 + 80, y), 0.35, C['warn'])
-        y += 26
-
-        # 评分条
-        score = det.get_score()
-        put_text(frame, "Score", (x0, y), 0.35, C['text_dim'])
-        sc_color = C['writing'] if score > 0.55 else C['hover'] if score > 0.42 else C['idle']
-        draw_hbar(frame, x0 + 80, y - 10, 140, 12, score, sc_color)
-        put_text(frame, f"{score:.2f}", (x0 + 82, y), 0.32, (255, 255, 255), 1)
-        y += 26
-
-        # 坐标
-        put_text(frame, "Palm XY", (x0, y), 0.35, C['text_dim'])
-        if detector.write_pos_palm:
-            px, py = detector.write_pos_palm
-            put_text(frame, f"({px:.3f}, {py:.3f})", (x0 + 80, y), 0.35, C['text'])
+        if hr and hr.phase == 'ready':
+            D   = hr.distance
+            tau = hr.threshold
+            ratio = D / (tau * 2.0) if tau > 0 else 0.0
+            bar_color = C['writing'] if is_writing else C['touch'] if D > tau * 0.7 else C['hover']
+            draw_hbar(frame, x0 + 80, y - 10, 140, 12, ratio, bar_color)
+            put_text(frame, f"D={D:.2f} t={tau:.2f}", (x0 + 82, y), 0.29, (255, 255, 255), 1)
         else:
             put_text(frame, "–", (x0 + 80, y), 0.35, C['text_dim'])
         y += 26
 
-        # 平面信息
-        psys = detector.palm_tracker.get_current_system()
-        if psys:
-            put_text(frame, "Inliers", (x0, y), 0.35, C['text_dim'])
-            put_text(frame, str(psys.n_inliers), (x0 + 80, y), 0.35, C['text'])
-            put_text(frame, "Plane", (x0 + 130, y), 0.35, C['text_dim'])
-            put_text(frame, "OK", (x0 + 180, y), 0.35, C['writing'])
+        # 掌面 UV 坐标
+        put_text(frame, "Palm UV", (x0, y), 0.35, C['text_dim'])
+        if detector.write_pos_palm:
+            pu, pv = detector.write_pos_palm
+            put_text(frame, f"({pu:.3f},{pv:.3f})", (x0 + 80, y), 0.30, C['text'])
         else:
-            put_text(frame, "Plane", (x0, y), 0.35, C['text_dim'])
+            put_text(frame, "–", (x0 + 80, y), 0.35, C['text_dim'])
+        y += 26
+
+        # 掌面坐标系状态
+        put_text(frame, "Palm", (x0, y), 0.35, C['text_dim'])
+        if detector.palm_local_frame.is_valid:
+            put_text(frame, "OK", (x0 + 80, y), 0.35, C['writing'])
+        else:
             put_text(frame, "NO FIT", (x0 + 80, y), 0.35, C['warn'])
 
     else:
@@ -354,18 +354,14 @@ def main():
 
     print("\n  ESC/Q  Exit  |  S  Save  |  C  Clear\n")
 
-    t0 = time.time()
-
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
 
-            ts = time.time() - t0
-
             if palm_mode:
-                is_writing = detector.process(frame, ts)
+                is_writing = detector.process(frame)
                 cur_pos = detector.get_screen_position()
             else:
                 is_writing = detector.process(frame)

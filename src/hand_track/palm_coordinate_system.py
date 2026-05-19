@@ -4,7 +4,7 @@
 """
 
 import numpy as np
-from typing import Optional, Tuple, Dict
+from typing import Optional, Tuple
 from dataclasses import dataclass
 import time
 
@@ -106,6 +106,22 @@ class PalmLocalFrame:
 
     def reset(self):
         self._origin = self._u = self._v = self._n = None
+
+    @property
+    def origin(self) -> Optional[np.ndarray]:
+        return self._origin.copy() if self._origin is not None else None
+
+    @property
+    def u_axis(self) -> Optional[np.ndarray]:
+        return self._u.copy() if self._u is not None else None
+
+    @property
+    def v_axis(self) -> Optional[np.ndarray]:
+        return self._v.copy() if self._v is not None else None
+
+    @property
+    def n_axis(self) -> Optional[np.ndarray]:
+        return self._n.copy() if self._n is not None else None
 
 
 @dataclass
