@@ -10,11 +10,16 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Optional
 
-from src.hand_track.contact_detector import ContactState
+from enum import Enum
+
+
+class ContactState(Enum):
+    IDLE    = "idle"
+    CONTACT = "contact"
 
 
 # ── 默认超参数 ────────────────────────────────────────────────────────────────
-_CONFIRM_FRAMES = 3   # 状态切换所需的连续确认帧数（≈50ms @60fps）
+_CONFIRM_FRAMES = 4   # 状态切换所需的连续确认帧数（≈67ms @60fps）
 _ONSET_LOOKBACK = 8   # onset 精确化回溯窗口（帧）
 
 

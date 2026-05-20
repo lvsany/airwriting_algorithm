@@ -7,7 +7,7 @@ Hover-Anchored 在线接触检测模块
 
 两阶段流程：
   阶段一（Hover 校准）—— 稳定性等待 → 采集 150 帧 → 鲁棒基线 + 自适应阈值 τ
-  阶段二（在线检测）  —— 归一化欧氏距离 + 方向约束 → raw_contact
+  阶段二（在线检测）  —— 归一化欧氏距离 D 与阈值 τ → raw_contact
 """
 
 from __future__ import annotations
@@ -22,13 +22,10 @@ from typing import Optional
 # ── 默认超参数 ────────────────────────────────────────────────────────────────
 _STABILITY_WIN = 10      # 稳定性检测窗口（帧）
 _STABILITY_THR = 5.0     # dist2d_lm0 滑动标准差阈值（像素），低于此值视为稳定
-_COLLECT_N     = 150     # hover 采集帧数（约 2.5 秒 @60fps）
-_PERCENTILE    = 99.0    # 自适应阈值 τ 所用百分位
+_COLLECT_N     = 150     # hover 采集帧数（约 3 秒 @60fps）
+_PERCENTILE    = 99.0    # 自适应阈值 τ 所用百分位  # FIX: 缺陷D - 由95改为99，使hover帧的5%误判降至1%
 _MAD_SCALE     = 1.4826  # MAD → 高斯等效 σ 的一致性修正因子
 _SIGMA_MIN     = 1e-6    # σ 下界，触发后置 1.0（防除零）
-_DIM_DIST      = 5       # 方向约束涉及的维度数（dims 0-4：几何距离组）
-
-
 class _Phase(Enum):
     WAITING    = "waiting"     # 等待 dist2d_lm0 稳定
     COLLECTING = "collecting"  # 采集 hover 帧，建立基线
@@ -74,15 +71,15 @@ class HoverAnchorDetector:
 
     def __init__(
         self,
-        stability_win: int   = _STABILITY_WIN,
-        stability_thr: float = _STABILITY_THR,
-        collect_n:     int   = _COLLECT_N,
-        percentile:    float = _PERCENTILE,
+        stability_win:    int   = _STABILITY_WIN,
+        stability_thr:    float = _STABILITY_THR,
+        collect_n:        int   = _COLLECT_N,
+        percentile:       float = _PERCENTILE,
     ):
-        self._stability_win = stability_win
-        self._stability_thr = stability_thr
-        self._collect_n     = collect_n
-        self._percentile    = percentile
+        self._stability_win   = stability_win
+        self._stability_thr   = stability_thr
+        self._collect_n       = collect_n
+        self._percentile      = percentile
 
         self._phase     = _Phase.WAITING
         self._stab_buf: deque = deque(maxlen=stability_win)
@@ -94,7 +91,7 @@ class HoverAnchorDetector:
 
     # ── 公开接口 ─────────────────────────────────────────────────────────────
 
-    def update(self, feat: np.ndarray) -> HoverDetectResult:
+    def update(self, feat: np.ndarray, in_contact: bool = False) -> HoverDetectResult:
         """
         喂入一帧 10 维特征向量，返回检测结果。
 
@@ -102,6 +99,9 @@ class HoverAnchorDetector:
         ----------
         feat : np.ndarray, shape (10,)
             HandFeatureExtractor.extract() 的输出；可含 NaN。
+        in_contact : bool
+            上一帧已处于 CONTACT 状态时为 True；用于让接触维持阶段不再
+            强依赖方向特征（theta / local_n）。
 
         Returns
         -------
@@ -111,7 +111,7 @@ class HoverAnchorDetector:
             return self._do_waiting(feat)
         if self._phase == _Phase.COLLECTING:
             return self._do_collecting(feat)
-        return self._do_detecting(feat)
+        return self._do_detecting(feat, in_contact)
 
     def get_baseline(self) -> dict:
         """
@@ -135,6 +135,19 @@ class HoverAnchorDetector:
     @property
     def is_calibrated(self) -> bool:
         return self._phase == _Phase.READY
+
+    def get_debug_detail(self) -> dict:
+        """返回内部诊断状态，供日志和 HUD 使用。"""
+        stab_std = (float(np.std(list(self._stab_buf)))
+                    if len(self._stab_buf) > 1 else None)
+        return {
+            'phase':         self._phase.value,
+            'stab_buf_len':  len(self._stab_buf),
+            'stab_buf_std':  stab_std,
+            'collect_n':     len(self._hover_buf),
+            'collect_total': self._collect_n,
+            'tau':           self._tau,
+        }
 
     # ── 阶段处理 ─────────────────────────────────────────────────────────────
 
@@ -172,12 +185,65 @@ class HoverAnchorDetector:
             z_vec=np.zeros(len(feat)),
         )
 
-    def _do_detecting(self, feat: np.ndarray) -> HoverDetectResult:
-        """在线检测：归一化距离 + 方向约束。"""
-        z            = self._normalize(feat)
-        D            = float(np.linalg.norm(z))
-        direction_ok = float(np.mean(z[:_DIM_DIST])) < 0.0
-        raw_contact  = bool(D > self._tau) and direction_ok
+    def _do_detecting(self, feat: np.ndarray, in_contact: bool) -> HoverDetectResult:
+        """在线检测：用归一化欧氏距离 D 与方向门控判定接触。
+
+        feat[0] = dist2d(右手lm8, 左手lm0)，已是像素单位（由 HandFeatureExtractor 计算）。
+        进入接触：D > τ 且方向特征满足（local_n / theta）。
+        维持接触：仅依赖 D > τ（避免静止/抖动导致误退）。
+        D / z_vec 仍保留供 HUD 和 CSV 调试用，不参与接触判定。
+        """
+        z = self._normalize(feat)
+        D = float(np.linalg.norm(z))
+
+
+                
+        # ==========================================================
+        # direction features
+        # ==========================================================
+
+        local_n = feat[6]
+        theta   = feat[9]
+
+        # local_n:
+        #   < 0  -> 指尖朝掌面方向
+        #   > 0  -> 远离掌面
+        #
+        # theta:
+        #   0°   -> 正对掌面靠近
+        #   90°  -> 平行移动
+        #   180° -> 离开掌面
+
+        local_ok = (
+            np.isfinite(local_n)
+            and local_n < -0.01
+        )
+
+        theta_ok = (not np.isfinite(theta)) or theta < 75.0
+
+        dir_ok = local_ok or theta_ok
+
+        # ==========================================================
+        # final decision
+        # ==========================================================
+
+        if self._tau is not None and np.isfinite(self._tau):
+            tau = float(self._tau)
+            if in_contact:
+                raw_contact = D > tau
+            else:
+                raw_contact = D > tau and dir_ok
+        else:
+            raw_contact = False
+
+        print(
+            f"D={D:.2f} "
+            f"tau={self._tau:.2f} "
+            f"local_n={local_n:.4f} "
+            f"theta={theta:.1f} "
+            f"dir_ok={dir_ok} "
+            f"raw={raw_contact}"
+        )
 
         return HoverDetectResult(
             phase='ready', progress=1.0,
@@ -212,6 +278,7 @@ class HoverAnchorDetector:
         # 用 hover 帧本身计算距离分布以确定阈值
         Z   = (F - mu) / sig
         Z[np.isnan(Z)] = 0.0
+        # D 为对角协方差近似的马氏距离：|| (f-μ)/σ ||_2
         D   = np.linalg.norm(Z, axis=1)            # (N,)
         tau = float(np.percentile(D, self._percentile))
 

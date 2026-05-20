@@ -14,8 +14,11 @@ from enum import Enum
 from src.hand_track.palm_coordinate_system import PalmLocalFrame
 from src.hand_track.feature_extractor import HandFeatureExtractor
 from src.hand_track.hover_anchor_detector import HoverAnchorDetector, HoverDetectResult
-from src.hand_track.contact_state_machine import ContactStateMachine, SmoothContactResult
-from src.hand_track.contact_detector import ContactState
+from src.hand_track.contact_state_machine import (
+    ContactStateMachine,
+    SmoothContactResult,
+    ContactState,
+)
 from src.utils.geometry_utils import get_landmark_3d
 
 
@@ -65,6 +68,7 @@ class DualHandDetector:
         self.write_pos       = (0, 0)
         self.write_pos_palm  = None   # (u, v) in palm local frame
         self.dist_palm       = None   # n component (signed distance to palm plane)
+        self.last_feat: np.ndarray = np.full(10, np.nan)  # last extracted feature vector
         self.frame_shape     = None
         self.frame_cnt       = 0
 
@@ -84,10 +88,10 @@ class DualHandDetector:
         if results.multi_hand_landmarks and results.multi_handedness:
             for lm, hd in zip(results.multi_hand_landmarks, results.multi_handedness):
                 label = hd.classification[0].label
-                # MediaPipe mirrors labels: "Left" in image = right hand
-                if label == "Left":
+                # MediaPipe uses anatomical labels: "Right" = user's right hand
+                if label == "Right":
                     self.right_lm = lm
-                elif label == "Right":
+                elif label == "Left":
                     self.left_lm = lm
                 self.mp_drawing.draw_landmarks(frame, lm, self.mp_hands.HAND_CONNECTIONS)
             self._assign_roles()
@@ -112,6 +116,8 @@ class DualHandDetector:
             feat = np.full(10, np.nan)
             self._feat_extractor.reset()
 
+        self.last_feat = feat
+
         self.hover_result  = self._hover_det.update(feat)
         self.contact_result = self._contact_sm.update(
             self.hover_result.raw_contact,
@@ -124,6 +130,16 @@ class DualHandDetector:
     def _assign_roles(self):
         if not self.left_lm or not self.right_lm:
             return
+
+        # Heuristic correction for MediaPipe label confusion (e.g. hands close/crossed).
+        # For a mirrored front-facing camera (standard Mac setup): the user's
+        # anatomical right hand appears on the IMAGE RIGHT side (larger x centroid).
+        # If the centroid check disagrees with MediaPipe labels, trust x-position.
+        right_cx = float(np.mean([lm.x for lm in self.right_lm.landmark]))
+        left_cx  = float(np.mean([lm.x for lm in self.left_lm.landmark]))
+        if right_cx < left_cx:          # right hand should be on image RIGHT (larger x)
+            self.left_lm, self.right_lm = self.right_lm, self.left_lm
+
         if self.role_mode == "position":
             if self.dominant == "right":
                 self.right_role, self.left_role = HandRole.WRITING, HandRole.PALM
@@ -183,3 +199,4 @@ class DualHandDetector:
         self.dist_palm       = None
         self.hover_result    = None
         self.contact_result  = None
+        self.last_feat       = np.full(10, np.nan)

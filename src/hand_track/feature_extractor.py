@@ -148,7 +148,7 @@ class HandFeatureExtractor:
         计算指尖运动方向（t 相对 t-3）与掌面法向量的夹角（度）。
 
         - 历史不足 4 帧或坐标系无效 → NaN
-        - 像素位移 < 2 px（静止）→ 90.0
+        - 像素位移 < 2 px（静止）→ NaN
         - 正常 → [0, 180] 度，0° 表示垂直靠近掌面
         """
         if palm_frame is None:
@@ -159,12 +159,12 @@ class HandFeatureExtractor:
 
         px_now, px_old = self._tip_px[-1], self._tip_px[0]
         if np.hypot(px_now[0] - px_old[0], px_now[1] - px_old[1]) < _STILL_PX:
-            return 90.0
+            return np.nan
 
         motion = self._tip_3d[-1] - self._tip_3d[0]
         m_norm = np.linalg.norm(motion)
         if m_norm < 1e-9:
-            return 90.0
+            return np.nan
         motion    = motion / m_norm
         cos_theta = float(np.clip(np.dot(motion, normal), -1.0, 1.0))
         return float(np.degrees(np.arccos(cos_theta)))
