@@ -46,6 +46,7 @@ class HandFeatureExtractor:
     def __init__(self):
         self._tip_px: deque = deque(maxlen=_APPROACH_WIN)  # (cx, cy) int
         self._tip_3d: deque = deque(maxlen=_APPROACH_WIN)  # np.ndarray (3,)
+        self._theta_ema = None
 
     # ── 公开接口 ─────────────────────────────────────────────────────────────
 
@@ -75,6 +76,7 @@ class HandFeatureExtractor:
         if write_lm is None or palm_lm is None:
             self._tip_px.clear()
             self._tip_3d.clear()
+            self._theta_ema = None
             return feat
 
         h, w = frame_gray.shape[:2]
@@ -107,7 +109,19 @@ class HandFeatureExtractor:
         tip_3d_now = get_landmark_3d(write_lm, 8)
         self._tip_px.append((cx, cy))
         self._tip_3d.append(tip_3d_now)
-        feat[9] = self._approach_theta(palm_frame)
+        raw_theta = self._approach_theta(palm_frame)
+
+        if np.isfinite(raw_theta):
+            if self._theta_ema is None:
+                self._theta_ema = raw_theta
+            else:
+                self._theta_ema = (
+                    0.8 * self._theta_ema
+                    + 0.2 * raw_theta
+                )
+
+        # 静止或无效时输出 NaN，避免用历史角度误导门控
+        feat[9] = self._theta_ema if np.isfinite(raw_theta) else np.nan
 
         return feat
 
@@ -115,6 +129,7 @@ class HandFeatureExtractor:
         """清空历史缓存（角色切换或场景重置时调用）。"""
         self._tip_px.clear()
         self._tip_3d.clear()
+        self._theta_ema = None
 
     # ── 内部方法 ─────────────────────────────────────────────────────────────
 
@@ -148,7 +163,7 @@ class HandFeatureExtractor:
         计算指尖运动方向（t 相对 t-3）与掌面法向量的夹角（度）。
 
         - 历史不足 4 帧或坐标系无效 → NaN
-        - 像素位移 < 2 px（静止）→ 90.0
+        - 像素位移 < 2 px（静止）→ NaN
         - 正常 → [0, 180] 度，0° 表示垂直靠近掌面
         """
         if palm_frame is None:
@@ -159,12 +174,12 @@ class HandFeatureExtractor:
 
         px_now, px_old = self._tip_px[-1], self._tip_px[0]
         if np.hypot(px_now[0] - px_old[0], px_now[1] - px_old[1]) < _STILL_PX:
-            return 90.0
+            return np.nan  # 静止时不计算角度，避免噪声干扰
 
         motion = self._tip_3d[-1] - self._tip_3d[0]
         m_norm = np.linalg.norm(motion)
         if m_norm < 1e-9:
-            return 90.0
+            return np.nan  # 3D 位移过小，无法计算方向
         motion    = motion / m_norm
         cos_theta = float(np.clip(np.dot(motion, normal), -1.0, 1.0))
         return float(np.degrees(np.arccos(cos_theta)))

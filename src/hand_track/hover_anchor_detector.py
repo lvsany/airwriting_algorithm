@@ -26,6 +26,10 @@ _COLLECT_N     = 150     # hover 采集帧数（约 3 秒 @60fps）
 _PERCENTILE    = 99.0    # 自适应阈值 τ 所用百分位  # FIX: 缺陷D - 由95改为99，使hover帧的5%误判降至1%
 _MAD_SCALE     = 1.4826  # MAD → 高斯等效 σ 的一致性修正因子
 _SIGMA_MIN     = 1e-6    # σ 下界，触发后置 1.0（防除零）
+
+_ENTER_SCALE = 1.0   # 进入 CONTACT 使用原阈值
+_EXIT_SCALE  = 0.55  # 退出 CONTACT 使用更低阈值（hysteresis）
+
 class _Phase(Enum):
     WAITING    = "waiting"     # 等待 dist2d_lm0 稳定
     COLLECTING = "collecting"  # 采集 hover 帧，建立基线
@@ -88,6 +92,7 @@ class HoverAnchorDetector:
         self._mu:  Optional[np.ndarray] = None
         self._sig: Optional[np.ndarray] = None
         self._tau: Optional[float]      = None
+        self._in_contact: bool          = False
 
     # ── 公开接口 ─────────────────────────────────────────────────────────────
 
@@ -128,6 +133,7 @@ class HoverAnchorDetector:
         self._stab_buf.clear()
         self._hover_buf.clear()
         self._mu = self._sig = self._tau = None
+        self._in_contact = False
 
     @property
     def is_calibrated(self) -> bool:
@@ -183,11 +189,11 @@ class HoverAnchorDetector:
         )
 
     def _do_detecting(self, feat: np.ndarray) -> HoverDetectResult:
-        """在线检测：用归一化欧氏距离 D 与方向门控判定接触。
+        """在线检测：仅以归一化欧氏距离 D 判定接触。
 
         feat[0] = dist2d(右手lm8, 左手lm0)，已是像素单位（由 HandFeatureExtractor 计算）。
-        接触判定：D > τ 且 mean(z[:5]) < 0（指尖相对掌面 5 点整体靠近）。
-        D / z_vec 仍保留供 HUD 和 CSV 调试用，不参与接触判定。
+        接触判定：D > τ（进入/退出使用滞回阈值）。
+        方向特征仅保留日志观察，不参与判定。
         """
         z = self._normalize(feat)
         D = float(np.linalg.norm(z))
@@ -202,17 +208,18 @@ class HoverAnchorDetector:
         theta   = feat[9]
 
         # local_n:
-        #   < 0  -> 指尖朝掌面方向
-        #   > 0  -> 远离掌面
+        #   使用相对 hover 的 z-score 判断“朝掌面靠近”，避免法向量翻转导致符号反转
         #
         # theta:
         #   0°   -> 正对掌面靠近
         #   90°  -> 平行移动
         #   180° -> 离开掌面
 
+        local_z = z[6]
         local_ok = (
             np.isfinite(local_n)
-            and local_n < -0.01
+            and np.isfinite(local_z)
+            and local_z < 0.0
         )
 
         theta_ok = (
@@ -220,18 +227,25 @@ class HoverAnchorDetector:
             and theta < 75.0
         )
 
-        dir_ok = local_ok or theta_ok
+        # 仅在有有效方向特征时启用门控；否则不阻塞 D
+        if np.isfinite(local_n) or np.isfinite(theta):
+            dir_ok = local_ok or theta_ok
+        else:
+            dir_ok = True
 
         # ==========================================================
         # final decision
         # ==========================================================
 
-        raw_contact = (
-            self._tau is not None
-            and np.isfinite(self._tau)
-            and D > float(self._tau)
-            and dir_ok
-        )
+        enter_tau = self._tau * _ENTER_SCALE
+        exit_tau  = self._tau * _EXIT_SCALE
+
+        if not self._in_contact:
+            raw_contact = D > float(enter_tau)
+        else:
+            raw_contact = D > float(exit_tau)
+
+        self._in_contact = raw_contact
 
         print(
             f"D={D:.2f} "
@@ -301,9 +315,11 @@ def _run_unit_test():
     # 随机给约 40% 帧的 dim 6 设为 NaN，模拟真实的 local_n 缺失
     hover[rng.random(200) < 0.4, 6] = np.nan
 
-    # contact: dims 0-4 降至 60（指尖靠近 → 距离显著减小），其余同 hover 分布
+    # contact: dims 0-4 降至 60（指尖靠近 → 距离显著减小），
+    #          dim 6 降至 90（local_n 相对 hover 降低 → 通过方向门控）
     contact = rng.normal(100.0, 2.0, (50, N))
     contact[:, :5] = rng.normal(60.0, 2.0, (50, 5))
+    contact[:, 6] = rng.normal(90.0, 2.0, 50)
 
     # stability_win=1, stability_thr=1e9 → 第一帧即触发稳定
     det = HoverAnchorDetector(stability_win=1, stability_thr=1e9, collect_n=150)

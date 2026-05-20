@@ -106,6 +106,10 @@ class _CsvLogger:
         if self._count % 60 == 0:
             self._fh.flush()
 
+    @property
+    def path(self):
+        return self._path
+
     def close(self):
         self._fh.flush()
         self._fh.close()
@@ -387,7 +391,7 @@ def draw_debug_info(frame, detector, is_writing, fps, lat: dict):
     y += 20
 
     # ── 键位提示 ──
-    put_text(frame, "r=recalib  s=save  q=quit", (x0, y), 0.30, C['text_dim'])
+    put_text(frame, "r=recalib  q=quit", (x0, y), 0.30, C['text_dim'])
 
     # ── 底部条 ──
     bar_h = 26
@@ -395,7 +399,7 @@ def draw_debug_info(frame, detector, is_writing, fps, lat: dict):
     cv2.rectangle(ov, (0, h - bar_h), (w, h), C['panel'], -1)
     cv2.addWeighted(ov, 0.7, frame, 0.3, 0, frame)
     cv2.line(frame, (0, h - bar_h), (w, h - bar_h), C['panel_edge'], 1)
-    put_text(frame, "R  Recalibrate    S  Save    C  Clear canvas    Q / ESC  Quit",
+    put_text(frame, "R  Recalibrate    C  Clear canvas    Q / ESC  Quit",
              (w // 2 - 210, h - 8), 0.34, C['text_dim'], 1)
 
 
@@ -461,6 +465,14 @@ def main():
     prev_writing   = False
 
     vh, vw = CONFIG['video']['height'], CONFIG['video']['width']
+
+    # Video recording — one frame per CSV row for index-aligned annotation
+    _fourcc   = cv2.VideoWriter_fourcc(*'mp4v')
+    _vid_path = logger.path.replace('.csv', '.mp4')
+    _rec_fps  = min(CONFIG['video']['fps'], 30)  # cap at 30 for file size
+    vout      = cv2.VideoWriter(_vid_path, _fourcc, _rec_fps, (vw, vh))
+    print(f"[REC] Video → {_vid_path}")
+
     canvas = create_canvas(vh, vw)
 
     lat    = _LatencyAccum(window=100)
@@ -471,7 +483,7 @@ def main():
     t_session_start = time.time()
 
     os.makedirs(output_dir, exist_ok=True)
-    print("\n  R  Recalibrate  |  S  Save  |  C  Clear  |  Q/ESC  Quit\n")
+    print("\n  R  Recalibrate  |  C  Clear  |  Q/ESC  Quit\n")
 
     try:
         while True:
@@ -579,6 +591,7 @@ def main():
             if frame_id % 100 == 0:
                 lat.print_report(frame_id)
 
+            vout.write(frame)
             cv2.imshow('PalmWrite - Block A', frame)
 
             key = cv2.waitKey(1) & 0xFF
@@ -593,14 +606,6 @@ def main():
                 prev_writing = False
                 main._calib_printed = False
                 print(f"[RESET f={frame_id}] Calibration reset")
-            elif key == ord('s'):
-                ts_str = time.strftime("%Y%m%d_%H%M%S")
-                img_path = os.path.join(output_dir, f"traj_{ts_str}.png")
-                cv2.imwrite(img_path, canvas)
-                print(f"[SAVE] {img_path}")
-                if logger:
-                    logger.close()
-                    logger = _CsvLogger(output_dir)
             elif key == ord('c'):
                 canvas = create_canvas(vh, vw)
                 palm_traces.clear()
@@ -613,6 +618,7 @@ def main():
         pass
     finally:
         cap.release()
+        vout.release()
         cv2.destroyAllWindows()
         if logger:
             logger.close()
