@@ -19,7 +19,7 @@ class ContactState(Enum):
 
 
 # ── 默认超参数 ────────────────────────────────────────────────────────────────
-_CONFIRM_FRAMES = 4   # 状态切换所需的连续确认帧数（≈67ms @60fps）
+_CONFIRM_FRAMES = 1   # 状态切换所需的连续确认帧数（≈50ms @60fps）
 _ONSET_LOOKBACK = 8   # onset 精确化回溯窗口（帧）
 
 

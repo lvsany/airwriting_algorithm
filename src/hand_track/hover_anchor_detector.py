@@ -91,7 +91,7 @@ class HoverAnchorDetector:
 
     # ── 公开接口 ─────────────────────────────────────────────────────────────
 
-    def update(self, feat: np.ndarray, in_contact: bool = False) -> HoverDetectResult:
+    def update(self, feat: np.ndarray) -> HoverDetectResult:
         """
         喂入一帧 10 维特征向量，返回检测结果。
 
@@ -99,9 +99,6 @@ class HoverAnchorDetector:
         ----------
         feat : np.ndarray, shape (10,)
             HandFeatureExtractor.extract() 的输出；可含 NaN。
-        in_contact : bool
-            上一帧已处于 CONTACT 状态时为 True；用于让接触维持阶段不再
-            强依赖方向特征（theta / local_n）。
 
         Returns
         -------
@@ -111,7 +108,7 @@ class HoverAnchorDetector:
             return self._do_waiting(feat)
         if self._phase == _Phase.COLLECTING:
             return self._do_collecting(feat)
-        return self._do_detecting(feat, in_contact)
+        return self._do_detecting(feat)
 
     def get_baseline(self) -> dict:
         """
@@ -185,12 +182,11 @@ class HoverAnchorDetector:
             z_vec=np.zeros(len(feat)),
         )
 
-    def _do_detecting(self, feat: np.ndarray, in_contact: bool) -> HoverDetectResult:
+    def _do_detecting(self, feat: np.ndarray) -> HoverDetectResult:
         """在线检测：用归一化欧氏距离 D 与方向门控判定接触。
 
         feat[0] = dist2d(右手lm8, 左手lm0)，已是像素单位（由 HandFeatureExtractor 计算）。
-        进入接触：D > τ 且方向特征满足（local_n / theta）。
-        维持接触：仅依赖 D > τ（避免静止/抖动导致误退）。
+        接触判定：D > τ 且 mean(z[:5]) < 0（指尖相对掌面 5 点整体靠近）。
         D / z_vec 仍保留供 HUD 和 CSV 调试用，不参与接触判定。
         """
         z = self._normalize(feat)
@@ -219,7 +215,10 @@ class HoverAnchorDetector:
             and local_n < -0.01
         )
 
-        theta_ok = (not np.isfinite(theta)) or theta < 75.0
+        theta_ok = (
+            np.isfinite(theta)
+            and theta < 75.0
+        )
 
         dir_ok = local_ok or theta_ok
 
@@ -227,14 +226,12 @@ class HoverAnchorDetector:
         # final decision
         # ==========================================================
 
-        if self._tau is not None and np.isfinite(self._tau):
-            tau = float(self._tau)
-            if in_contact:
-                raw_contact = D > tau
-            else:
-                raw_contact = D > tau and dir_ok
-        else:
-            raw_contact = False
+        raw_contact = (
+            self._tau is not None
+            and np.isfinite(self._tau)
+            and D > float(self._tau)
+            and dir_ok
+        )
 
         print(
             f"D={D:.2f} "
