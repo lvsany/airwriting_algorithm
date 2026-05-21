@@ -80,7 +80,7 @@ class _CsvLogger:
         z    = hr.z_vec if (hr and hr.z_vec is not None) else np.zeros(10)
 
         dbg  = detector._contact_sm.get_debug_info()
-        dir_ok = int(float(np.mean(z[:5])) < 0.0) if hr and hr.phase == 'ready' else ''
+        dir_ok = int(z[0] < 0.0) if hr and hr.phase == 'ready' else ''
 
         row = {
             'frame_id':   frame_id,
@@ -435,7 +435,7 @@ def main():
     print("  Block A - Palm Writing Real-time Test")
     print("=" * 52)
 
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture("test.mp4")  # Use "0" for webcam or path to video file
     if not cap.isOpened():
         print("[ERR] Cannot open camera")
         return
@@ -467,11 +467,15 @@ def main():
     vh, vw = CONFIG['video']['height'], CONFIG['video']['width']
 
     # Video recording — one frame per CSV row for index-aligned annotation
-    _fourcc   = cv2.VideoWriter_fourcc(*'mp4v')
-    _vid_path = logger.path.replace('.csv', '.mp4')
-    _rec_fps  = min(CONFIG['video']['fps'], 30)  # cap at 30 for file size
-    vout      = cv2.VideoWriter(_vid_path, _fourcc, _rec_fps, (vw, vh))
-    print(f"[REC] Video → {_vid_path}")
+    _fourcc    = cv2.VideoWriter_fourcc(*'mp4v')
+    _vid_base  = logger.path.replace('.csv', '')
+    _rec_fps   = min(CONFIG['video']['fps'], 30)  # cap at 30 for file size
+    _vid_ui    = f"{_vid_base}_ui.mp4"
+    _vid_raw   = f"{_vid_base}_raw.mp4"
+    vout_ui    = cv2.VideoWriter(_vid_ui,  _fourcc, _rec_fps, (vw, vh))
+    vout_raw   = cv2.VideoWriter(_vid_raw, _fourcc, _rec_fps, (vw, vh))
+    print(f"[REC] Video(UI)  → {_vid_ui}")
+    print(f"[REC] Video(Raw) → {_vid_raw}")
 
     canvas = create_canvas(vh, vw)
 
@@ -492,6 +496,7 @@ def main():
                 break
 
             t_frame_start = time.perf_counter()
+            frame_raw = frame.copy()
             frame_id += 1
             ts = time.time() - t_session_start
 
@@ -591,7 +596,8 @@ def main():
             if frame_id % 100 == 0:
                 lat.print_report(frame_id)
 
-            vout.write(frame)
+            vout_raw.write(frame_raw)
+            vout_ui.write(frame)
             cv2.imshow('PalmWrite - Block A', frame)
 
             key = cv2.waitKey(1) & 0xFF
@@ -618,7 +624,8 @@ def main():
         pass
     finally:
         cap.release()
-        vout.release()
+        vout_ui.release()
+        vout_raw.release()
         cv2.destroyAllWindows()
         if logger:
             logger.close()

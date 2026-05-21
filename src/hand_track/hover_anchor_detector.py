@@ -27,8 +27,11 @@ _PERCENTILE    = 99.0    # 自适应阈值 τ 所用百分位  # FIX: 缺陷D - 
 _MAD_SCALE     = 1.4826  # MAD → 高斯等效 σ 的一致性修正因子
 _SIGMA_MIN     = 1e-6    # σ 下界，触发后置 1.0（防除零）
 
+# 参与马氏距离计算的维度（f_0, f_7, f_8, f_9 —— contact时一致减小的特征）
+_ACTIVE_DIMS = np.array([0, 7, 8, 9])
+
 _ENTER_SCALE = 1.0   # 进入 CONTACT 使用原阈值
-_EXIT_SCALE  = 0.55  # 退出 CONTACT 使用更低阈值（hysteresis）
+_EXIT_SCALE  = 0.85  # 退出 CONTACT 使用更低阈值（hysteresis）
 
 class _Phase(Enum):
     WAITING    = "waiting"     # 等待 dist2d_lm0 稳定
@@ -189,72 +192,22 @@ class HoverAnchorDetector:
         )
 
     def _do_detecting(self, feat: np.ndarray) -> HoverDetectResult:
-        """在线检测：仅以归一化欧氏距离 D 判定接触。
-
-        feat[0] = dist2d(右手lm8, 左手lm0)，已是像素单位（由 HandFeatureExtractor 计算）。
-        接触判定：D > τ（进入/退出使用滞回阈值）。
-        方向特征仅保留日志观察，不参与判定。
-        """
+        """在线检测：以 4 维归一化距离 + 方向约束判定接触。"""
         z = self._normalize(feat)
-        D = float(np.linalg.norm(z))
+        D = float(np.linalg.norm(z[_ACTIVE_DIMS]))  # 只用4维计算距离
 
-
-                
-        # ==========================================================
-        # direction features
-        # ==========================================================
-
-        local_n = feat[6]
-        theta   = feat[9]
-
-        # local_n:
-        #   使用相对 hover 的 z-score 判断“朝掌面靠近”，避免法向量翻转导致符号反转
-        #
-        # theta:
-        #   0°   -> 正对掌面靠近
-        #   90°  -> 平行移动
-        #   180° -> 离开掌面
-
-        local_z = z[6]
-        local_ok = (
-            np.isfinite(local_n)
-            and np.isfinite(local_z)
-            and local_z < 0.0
-        )
-
-        theta_ok = (
-            np.isfinite(theta)
-            and theta < 75.0
-        )
-
-        # 仅在有有效方向特征时启用门控；否则不阻塞 D
-        if np.isfinite(local_n) or np.isfinite(theta):
-            dir_ok = local_ok or theta_ok
-        else:
-            dir_ok = True
-
-        # ==========================================================
-        # final decision
-        # ==========================================================
+        # 方向约束：z[0] < 0 表示 f_0 比 hover 更小（指尖更靠近手腕 = 接触）
+        z0_ok = z[0] < 0.0 if np.isfinite(z[0]) and z[0] != 0.0 else False
 
         enter_tau = self._tau * _ENTER_SCALE
         exit_tau  = self._tau * _EXIT_SCALE
 
         if not self._in_contact:
-            raw_contact = D > float(enter_tau)
+            raw_contact = (D > enter_tau) and z0_ok
         else:
-            raw_contact = D > float(exit_tau)
+            raw_contact = D > exit_tau  # 退出时不检查方向，避免卡住
 
         self._in_contact = raw_contact
-
-        print(
-            f"D={D:.2f} "
-            f"tau={self._tau:.2f} "
-            f"local_n={local_n:.4f} "
-            f"theta={theta:.1f} "
-            f"dir_ok={dir_ok} "
-            f"raw={raw_contact}"
-        )
 
         return HoverDetectResult(
             phase='ready', progress=1.0,
@@ -289,8 +242,8 @@ class HoverAnchorDetector:
         # 用 hover 帧本身计算距离分布以确定阈值
         Z   = (F - mu) / sig
         Z[np.isnan(Z)] = 0.0
-        # D 为对角协方差近似的马氏距离：|| (f-μ)/σ ||_2
-        D   = np.linalg.norm(Z, axis=1)            # (N,)
+        # D 为对角协方差近似的马氏距离：|| (f-μ)/σ ||_2（仅使用部分维度）
+        D   = np.linalg.norm(Z[:, _ACTIVE_DIMS], axis=1)  # (N,)
         tau = float(np.percentile(D, self._percentile))
 
         self._mu  = mu

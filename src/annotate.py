@@ -14,7 +14,7 @@
     Q / ESC   — 退出
 """
 
-import csv, cv2, numpy as np, os, shutil, sys, time
+import csv, cv2, numpy as np, os, shutil, sys
 
 
 def load_csv(path):
@@ -67,20 +67,23 @@ def main(session_path=None):
     modified  = False
     speed     = 1.0
     paused    = False
-    t_last    = time.perf_counter()
 
     print(f"[INFO] {n} frames  |  空格=切换状态  P=暂停  +/-=速度  W=保存  Q=退出")
 
-    while frame_idx < n:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
-        ret, frame = cap.read()
-        if not ret:
-            break
+    last_frame = None   # 缓存暂停时的画面
 
+    while True:
+        # ── 读帧（顺序读，只在暂停时复用上一帧）────────────────────────────
         if not paused:
+            ret, frame = cap.read()
+            if not ret or frame_idx >= n:
+                break
+            last_frame = frame
             manual_states[frame_idx] = cur_state
+        else:
+            frame = last_frame.copy() if last_frame is not None else np.zeros((720, 1280, 3), np.uint8)
 
-        # ── 绘制状态文字 ─────────────────────────────────────────────────────
+        # ── 绘制 ─────────────────────────────────────────────────────────────
         h, w = frame.shape[:2]
         algo_s = algo_states[frame_idx]
 
@@ -106,8 +109,10 @@ def main(session_path=None):
 
         cv2.imshow('Annotate', frame)
 
-        # ── 按键 ─────────────────────────────────────────────────────────────
-        key = cv2.waitKey(1) & 0xFF
+        # ── waitKey 直接承担帧率控制，无需 sleep ─────────────────────────────
+        wait_ms = max(1, int(1000 / (fps * speed))) if not paused else 30
+        key = cv2.waitKey(wait_ms) & 0xFF
+
         if key in (27, ord('q')):
             break
         elif key == ord('p'):
@@ -123,17 +128,8 @@ def main(session_path=None):
             save_csv(csv_path, rows, manual_states)
             modified = False
 
-        # ── 帧率控制 ─────────────────────────────────────────────────────────
-        if paused:
-            continue
-
-        now  = time.perf_counter()
-        wait = (1.0 / (fps * speed)) - (now - t_last)
-        if wait > 0:
-            time.sleep(wait)
-        t_last = time.perf_counter()
-
-        frame_idx += 1
+        if not paused:
+            frame_idx += 1
 
     cap.release()
     cv2.destroyAllWindows()
