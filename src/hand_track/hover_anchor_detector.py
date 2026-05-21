@@ -30,8 +30,8 @@ _SIGMA_MIN     = 1e-6    # σ 下界，触发后置 1.0（防除零）
 # 参与马氏距离计算的维度（f_0, f_7, f_8, f_9 —— contact时一致减小的特征）
 _ACTIVE_DIMS = np.array([0, 7, 8, 9])
 
-_ENTER_SCALE = 0.8   # 进入 CONTACT 使用原阈值
-_EXIT_SCALE  = 1.01  # 退出 CONTACT 使用更低阈值（hysteresis）
+_ENTER_SCALE = 1
+_EXIT_SCALE  = 1.05
 
 class _Phase(Enum):
     WAITING    = "waiting"     # 等待 dist2d_lm0 稳定

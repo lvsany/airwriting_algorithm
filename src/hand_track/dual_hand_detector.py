@@ -26,6 +26,13 @@ config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.y
 with open(config_path, 'r', encoding='utf-8') as file:
     CONFIG = yaml.safe_load(file)
 
+_STILL_END_SEC = 0.6
+_STILL_END_PX  = 20.0
+_STILL_END_FRAMES = max(
+    1,
+    int(round(CONFIG.get('video', {}).get('fps', 60) * _STILL_END_SEC))
+)
+
 
 class HandRole(Enum):
     WRITING = "writing"
@@ -71,10 +78,15 @@ class DualHandDetector:
         self.last_feat: np.ndarray = np.full(10, np.nan)  # last extracted feature vector
         self.frame_shape     = None
         self.frame_cnt       = 0
+        self._last_write_pos = None
+        self._still_frames   = 0
+        self._still_hold     = False
+        self._still_hold_event = False
 
     def process(self, frame):
         self.frame_shape = frame.shape
         self.frame_cnt  += 1
+        self._still_hold_event = False
         frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         h, w = frame.shape[:2]
 
@@ -116,22 +128,28 @@ class DualHandDetector:
                 self.write_pos_palm = (uc, vc)
                 self.dist_palm = nc
 
+            self._update_still_hold()
             feat = self._feat_extractor.extract(
                 self.write_lm, self.palm_lm, frame_gray, self._palm_frame
             )
         else:
             feat = np.full(10, np.nan)
             self._feat_extractor.reset()
+            self._reset_still_hold()
 
         self.last_feat = feat
 
         self.hover_result  = self._hover_det.update(feat)
+        raw_contact = self.hover_result.raw_contact and (not self._still_hold)
         self.contact_result = self._contact_sm.update(
-            self.hover_result.raw_contact,
+            raw_contact,
             self.hover_result.distance,
             self.frame_cnt,
         )
-        self.is_writing = self.contact_result.state == ContactState.CONTACT
+        self.is_writing = (
+            self.contact_result.state == ContactState.CONTACT
+            and (not self._still_hold)
+        )
         return self.is_writing
 
     def _assign_roles(self):
@@ -171,6 +189,15 @@ class DualHandDetector:
     def get_screen_position(self):
         return self.write_pos
 
+    def consume_still_hold_event(self) -> bool:
+        triggered = self._still_hold_event
+        self._still_hold_event = False
+        return triggered
+
+    @property
+    def still_hold_active(self) -> bool:
+        return self._still_hold
+
     def get_debug_info(self):
         return {
             'palm_enabled':   self.palm_enabled,
@@ -192,6 +219,11 @@ class DualHandDetector:
                 'changed': self.contact_result.changed,
                 'pending': self._contact_sm.get_debug_info()['pending'],
             } if self.contact_result else None,
+            'still_hold': {
+                'active': self._still_hold,
+                'frames': self._still_frames,
+                'threshold': _STILL_END_FRAMES,
+            },
         }
 
     def reset(self):
@@ -207,3 +239,53 @@ class DualHandDetector:
         self.hover_result    = None
         self.contact_result  = None
         self.last_feat       = np.full(10, np.nan)
+        self._reset_still_hold()
+
+    def _reset_still_hold(self):
+        self._last_write_pos = None
+        self._still_frames   = 0
+        self._still_hold     = False
+        self._still_hold_event = False
+
+    def _update_still_hold(self):
+        prev_hold = self._still_hold
+        prev_frames = self._still_frames
+
+        if self.write_pos == (0, 0):
+            self._reset_still_hold()
+            return
+
+        if self._last_write_pos is None:
+            self._last_write_pos = self.write_pos
+            self._still_frames = 0
+            return
+
+        dx = self.write_pos[0] - self._last_write_pos[0]
+        dy = self.write_pos[1] - self._last_write_pos[1]
+        moved = (dx * dx + dy * dy) > (_STILL_END_PX * _STILL_END_PX)
+
+        if moved:
+            if self._still_frames > 0 or self._still_hold:
+                print(f"[STILL RESET f={self.frame_cnt}] movement detected "
+                      f"(px>{_STILL_END_PX}) after {self._still_frames} frames")
+            self._still_frames = 0
+            self._still_hold = False
+        else:
+            if self._contact_sm.state == ContactState.CONTACT or self._still_hold:
+                if self._still_frames == 0:
+                    print(f"[STILL START f={self.frame_cnt}] hold begin "
+                          f"(threshold={_STILL_END_FRAMES} frames, px≤{_STILL_END_PX})")
+                self._still_frames += 1
+                if self._still_frames >= _STILL_END_FRAMES:
+                    self._still_hold = True
+            else:
+                self._still_frames = 0
+
+        if not prev_hold and self._still_hold:
+            self._still_hold_event = True
+            print(f"[STILL HOLD f={self.frame_cnt}] reached {self._still_frames}/"
+                  f"{_STILL_END_FRAMES} → force idle")
+        elif prev_hold and not self._still_hold and not moved:
+            print(f"[STILL RESUME f={self.frame_cnt}] hold cleared")
+
+        self._last_write_pos = self.write_pos

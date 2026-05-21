@@ -52,6 +52,12 @@ STATE_STYLE = {
     'contact': {'color': C['writing'], 'label': 'CONTACT'},
 }
 
+_SAVE_COOLDOWN_SEC = 0.5
+_SAVE_COOLDOWN_FRAMES = max(
+    1,
+    int(round(CONFIG.get('video', {}).get('fps', 60) * _SAVE_COOLDOWN_SEC))
+)
+
 
 # ─── CSV 日志 ───
 _CSV_COLS = (
@@ -114,6 +120,36 @@ class _CsvLogger:
         self._fh.flush()
         self._fh.close()
         print(f"[LOG] Saved {self._count} rows → {self._path}")
+
+
+# ─── 轨迹保存 ───
+class _StrokeSaver:
+    def __init__(self, base_csv_path: str):
+        self._base = base_csv_path.replace('.csv', '')
+        self._idx = 0
+
+    def save(self, trace):
+        if not trace:
+            return None
+        self._idx += 1
+        path = f"{self._base}_stroke_{self._idx:03d}.csv"
+        with open(path, 'w', newline='', encoding='utf-8') as f:
+            w = csv.DictWriter(f, fieldnames=['idx', 'u', 'v', 'x', 'y'])
+            w.writeheader()
+            for i, pt in enumerate(trace):
+                u = pt.get('u')
+                v = pt.get('v')
+                x = pt.get('x')
+                y = pt.get('y')
+                w.writerow({
+                    'idx': i,
+                    'u': f"{u:.6f}" if u is not None and np.isfinite(u) else '',
+                    'v': f"{v:.6f}" if v is not None and np.isfinite(v) else '',
+                    'x': x if x is not None else '',
+                    'y': y if y is not None else '',
+                })
+        print(f"[SAVE] Stroke {self._idx:03d} → {path}  ({len(trace)} pts)")
+        return path
 
 
 # ─── 延迟统计 ───
@@ -354,6 +390,13 @@ def draw_debug_info(frame, detector, is_writing, fps, lat: dict):
         put_text(frame, str(int(dir_ok)), (x0 + 165, y), 0.30, dir_c)
         put_text(frame, f"pend={detector._contact_sm.get_debug_info()['pending']}",
                  (x0 + 192, y), 0.30, C['text_dim'])
+        y += 18
+        sh = detector.get_debug_info().get('still_hold')
+        if sh:
+            sc = C['writing'] if sh['active'] else C['text_dim']
+            put_text(frame, "still", (x0, y), 0.30, C['text_dim'])
+            put_text(frame, f"{sh['frames']}/{sh['threshold']}",
+                     (x0 + 52, y), 0.30, sc)
     else:
         put_text(frame, "–", (x0 + 80, y), 0.33, C['text_dim'])
         y += 20
@@ -435,7 +478,7 @@ def main():
     print("  Block A - Palm Writing Real-time Test")
     print("=" * 52)
 
-    cap = cv2.VideoCapture("1.mp4")  # Use "0" for webcam or path to video file
+    cap = cv2.VideoCapture(1)  # Use "0" for webcam or path to video file
     if not cap.isOpened():
         print("[ERR] Cannot open camera")
         return
@@ -454,15 +497,17 @@ def main():
 
     detector = DualHandDetector()
     logger   = _CsvLogger(output_dir)
+    stroke_saver = _StrokeSaver(logger.path)
     print("[OK] Dual-hand palm writing mode (hover-anchored)")
     print("[OK] Heuristic handedness correction ON")
     print("[TIP] Hold both hands steady in hover position to calibrate")
 
-    palm_traces    = []    # 已完成的 (u,v) 轨迹列表
-    current_trace  = []    # 当前笔画的 (u,v) 轨迹
+    palm_traces    = []    # 已完成的轨迹列表（每笔为点序列）
+    current_trace  = []    # 当前笔画点序列（含 u,v,x,y）
     screen_traj    = []    # 屏幕像素位置，仅用于帧叠加可视化
     prev_pos       = None  # canvas 绘制上一像素位置
     prev_writing   = False
+    cooldown_frames = 0
 
     vh, vw = CONFIG['video']['height'], CONFIG['video']['width']
 
@@ -508,6 +553,10 @@ def main():
 
             hr = getattr(detector, 'hover_result', None)
             cr = getattr(detector, 'contact_result', None)
+            if cooldown_frames > 0:
+                cooldown_frames -= 1
+            writing_allowed = cooldown_frames == 0
+            effective_writing = is_writing and writing_allowed
 
             # ── 2. 校准完成时打印基线摘要 ────────────────────────────────
             if hr and hr.phase == 'ready':
@@ -548,23 +597,30 @@ def main():
 
             # ── 5. 轨迹记录 ────────────────────────────────────────────
             palm_uv = detector.get_writing_position()
+            hold_triggered = detector.consume_still_hold_event()
 
-            if not prev_writing and is_writing:
-                current_trace = []
-                screen_traj.clear()
-
-            if prev_writing and not is_writing:
+            if hold_triggered:
                 if current_trace:
                     palm_traces.append(current_trace)
+                    stroke_saver.save(current_trace)
+                canvas = create_canvas(vh, vw)
                 current_trace = []
                 screen_traj.clear()
                 prev_pos = None
+                prev_writing = False
+                cooldown_frames = _SAVE_COOLDOWN_FRAMES
+                print(f"[COOLDOWN] {cooldown_frames} frames")
 
-            prev_writing = is_writing
+            if effective_writing and not prev_writing and not current_trace:
+                screen_traj.clear()
 
-            if is_writing and cur_pos != (0, 0):
+            prev_writing = effective_writing
+
+            if effective_writing and cur_pos != (0, 0):
+                pt = {'x': cur_pos[0], 'y': cur_pos[1], 'u': None, 'v': None}
                 if palm_uv is not None:
-                    current_trace.append(palm_uv)
+                    pt['u'], pt['v'] = palm_uv
+                current_trace.append(pt)
                 if prev_pos is not None:
                     cv2.line(canvas, prev_pos, cur_pos, C['canvas_line'], 2, cv2.LINE_AA)
                 prev_pos = cur_pos
@@ -587,7 +643,7 @@ def main():
 
             draw_traj_on_frame(frame, screen_traj)
             draw_canvas_overlay(frame, canvas)
-            draw_writing_cursor(frame, cur_pos if cur_pos != (0, 0) else None, is_writing)
+            draw_writing_cursor(frame, cur_pos if cur_pos != (0, 0) else None, effective_writing)
 
             t_vis_ms  = (time.perf_counter() - t_vis0) * 1e3
             t_tot_ms  = (time.perf_counter() - t_frame_start) * 1e3
@@ -631,6 +687,7 @@ def main():
             logger.close()
         if current_trace:
             palm_traces.append(current_trace)
+            stroke_saver.save(current_trace)
         total = sum(len(t) for t in palm_traces)
         print(f"\n  Strokes: {len(palm_traces)}  Points: {total}")
         print(f"  Output:  {output_dir}")
