@@ -435,7 +435,7 @@ def main():
     print("  Block A - Palm Writing Real-time Test")
     print("=" * 52)
 
-    cap = cv2.VideoCapture("test.mp4")  # Use "0" for webcam or path to video file
+    cap = cv2.VideoCapture(1)  # Use "0" for webcam or path to video file
     if not cap.isOpened():
         print("[ERR] Cannot open camera")
         return

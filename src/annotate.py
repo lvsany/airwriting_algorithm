@@ -51,7 +51,7 @@ def main(session_path=None):
 
     stem = session_path.rsplit('.', 1)[0]
     csv_path   = stem + '.csv'
-    video_path = stem + '.mp4'
+    video_path = stem + '_raw.mp4'
 
     rows = load_csv(csv_path)
     n    = len(rows)

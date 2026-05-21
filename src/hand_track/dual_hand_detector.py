@@ -85,15 +85,22 @@ class DualHandDetector:
         self.write_pos_palm = None
         self.dist_palm      = None
 
-        if results.multi_hand_landmarks and results.multi_handedness:
-            for lm, hd in zip(results.multi_hand_landmarks, results.multi_handedness):
-                label = hd.classification[0].label
-                # MediaPipe uses anatomical labels: "Right" = user's right hand
-                if label == "Right":
-                    self.right_lm = lm
-                elif label == "Left":
-                    self.left_lm = lm
+        if results.multi_hand_landmarks:
+            hands = []
+            for lm in results.multi_hand_landmarks:
+                cx = float(np.mean([p.x for p in lm.landmark]))
+                hands.append((cx, lm))
                 self.mp_drawing.draw_landmarks(frame, lm, self.mp_hands.HAND_CONNECTIONS)
+            hands.sort(key=lambda x: x[0])  # image-left to image-right
+            if len(hands) == 1:
+                cx, lm = hands[0]
+                if cx < 0.5:
+                    self.left_lm = lm
+                else:
+                    self.right_lm = lm
+            else:
+                self.left_lm = hands[0][1]
+                self.right_lm = hands[-1][1]
             self._assign_roles()
 
         if self.palm_enabled and self.palm_lm:
