@@ -3,6 +3,7 @@ Exp-A1: 纯 tap 数据采集与标注
 
 标注模式：
   sticker  — 荧光贴纸 HSV 颜色面积检测，全自动，误差 < 1 帧
+  palmpad  — PalmPad 数据集，读取 .txt 标签文件（每帧 0/1）
 
 输出 CSV 格式（每帧一行）：
   frame_id, timestamp, contact_label,
@@ -31,7 +32,7 @@ STICKER_HSV = {
     'yellow': ((20,  100, 100), (35,  255, 255)),
     'pink':   ((140, 80,  80),  (170, 255, 255)),
     'blue':   ((85, 15, 120),   (225, 255, 255)),
-    'black':  ((0,   0,   0),   (45, 45,  45)),
+    'black':  ((0,   0,   0),   (180, 80,  90)),
 }
 STICKER_OCCLUDE_RATIO = 0.4   # 面积低于参考值此比例时判定为遮挡
 STICKER_CALIB_FRAMES = 30     # 标定所需帧数
@@ -187,18 +188,51 @@ class FeatureBuffer:
         return float(np.sqrt(dx**2 + dy**2) / dt * 1000.0)
 
 
+def _normalize_timestamp(raw_ts):
+    ts = float(raw_ts)
+    if ts > 1e12:
+        return ts / 1e6
+    if ts > 1e10:
+        return ts / 1e3
+    return ts
+
+
+def _load_palmpad_labels(label_file):
+    labels = []
+    with open(label_file, 'r', encoding='utf-8') as f:
+        for i, line in enumerate(f):
+            if i == 0:
+                continue
+            parts = line.strip().split()
+            if len(parts) < 2:
+                continue
+            ts = _normalize_timestamp(parts[0])
+            label = int(float(parts[1]))
+            labels.append((ts, label))
+    return labels
+
+
 def run_collect(subject: str, data_dir: str,
                 label_mode: str = 'sticker',
-                sticker_color: str = 'green'):
-    if label_mode != 'sticker':
-        raise ValueError("Exp-A1 仅支持 sticker 标注模式")
+                sticker_color: str = 'green',
+                video_path: str = None,
+                label_file: str = None,
+                no_vis: bool = False,
+                save_raw_video: bool = True):
+    if label_mode not in ('sticker', 'palmpad'):
+        raise ValueError("Exp-A1 仅支持 sticker / palmpad 标注模式")
+    if label_mode == 'palmpad' and not label_file:
+        raise ValueError("palmpad 模式必须提供 label_file")
 
     os.makedirs(data_dir, exist_ok=True)
 
     detector  = DualHandDetector()
     feat_buf  = FeatureBuffer()
 
-    cap = cv2.VideoCapture("aaa.mp4")
+    cap_source = 1 if not video_path or video_path in ('1', 'camera') else video_path
+    cap = cv2.VideoCapture(cap_source)
+    if isinstance(cap_source, str) and not cap.isOpened():
+        raise RuntimeError(f"无法打开视频源: {cap_source}")
 
     out_csv = os.path.join(data_dir, f'exp_a1_{subject}.csv')
     out_video = os.path.join(data_dir, f'exp_a1_{subject}_raw.mp4')
@@ -212,6 +246,7 @@ def run_collect(subject: str, data_dir: str,
     )
 
     hsv_lower, hsv_upper = STICKER_HSV.get(sticker_color, STICKER_HSV['green'])
+    label_list = _load_palmpad_labels(label_file) if label_mode == 'palmpad' else []
     sticker_ref_area = None
     calib_areas      = []
     video_writer     = None
@@ -224,9 +259,16 @@ def run_collect(subject: str, data_dir: str,
     frame_id         = 0
 
     print("=" * 55)
-    print(f"  标注模式: 荧光贴纸（{sticker_color}）自动检测")
-    print("  请将手掌平放，贴纸朝上，等待标定（约2秒）...")
-    print("  按 Q 或 ESC 结束采集")
+    if label_mode == 'sticker':
+        print(f"  标注模式: 荧光贴纸（{sticker_color}）自动检测")
+        print("  请将手掌平放，贴纸朝上，等待标定（约2秒）...")
+        print("  按 Q 或 ESC 结束采集")
+    else:
+        print("  标注模式: PalmPad 标签文件")
+        print(f"  标签文件: {label_file}")
+        print(f"  视频源: {cap_source}")
+        if no_vis:
+            print("  可视化: 关闭")
     print("=" * 55)
 
     with open(out_csv, 'w', newline='', encoding='utf-8') as csvfile:
@@ -238,7 +280,7 @@ def run_collect(subject: str, data_dir: str,
             if not ret:
                 break
 
-            if video_writer is None:
+            if save_raw_video and video_writer is None:
                 h, w = frame.shape[:2]
                 video_writer = cv2.VideoWriter(
                     out_video,
@@ -250,7 +292,15 @@ def run_collect(subject: str, data_dir: str,
                     raise RuntimeError(f"无法创建视频文件: {out_video}")
             raw_frame = frame.copy()
 
-            ts = time.time()
+            label_ts = None
+            label_val = 0
+            if label_mode == 'palmpad':
+                if frame_id < len(label_list):
+                    label_ts, label_val = label_list[frame_id]
+                elif frame_id == len(label_list):
+                    print(f"[警告] 标签帧数不足，剩余帧将使用 0 标签")
+
+            ts = label_ts if label_ts is not None else time.time()
             detector.process(frame, ts)
 
             frame_hsv  = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -311,41 +361,48 @@ def run_collect(subject: str, data_dir: str,
 
             # ── 标注判断 ──────────────────────────────────────────────────
             contact_label = 0
+            if label_mode == 'sticker':
+                palm_lm_for_sticker = detector.palm_lm or detector.left_lm or detector.right_lm
+                area, sticker_contour, has_palm = _detect_sticker_area(
+                    frame_hsv, hsv_lower, hsv_upper, palm_lm_for_sticker
+                )
+                if sticker_contour is not None:
+                    cv2.drawContours(frame, [sticker_contour], -1, (255, 0, 255), 2)
 
-            palm_lm_for_sticker = detector.palm_lm or detector.left_lm or detector.right_lm
-            area, sticker_contour, has_palm = _detect_sticker_area(
-                frame_hsv, hsv_lower, hsv_upper, palm_lm_for_sticker
-            )
-            if sticker_contour is not None:
-                cv2.drawContours(frame, [sticker_contour], -1, (255, 0, 255), 2)
-
-            if sticker_ref_area is None:
-                if has_palm:
-                    calib_areas.append(area)
-                    if len(calib_areas) >= STICKER_CALIB_FRAMES:
-                        sticker_ref_area = float(np.median(calib_areas))
-                        print(f"  [标定完成] 贴纸参考面积: {sticker_ref_area:.0f} px²")
-                        if sticker_ref_area < 50:
-                            print(f"  [警告] 参考面积过小（{sticker_ref_area:.0f}px²），贴纸可能未被检测到")
-                    cv2.putText(frame,
-                                f"Calibrating... {len(calib_areas)}/{STICKER_CALIB_FRAMES}",
-                                (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 165, 255), 2)
+                if sticker_ref_area is None:
+                    if has_palm:
+                        calib_areas.append(area)
+                        if len(calib_areas) >= STICKER_CALIB_FRAMES:
+                            sticker_ref_area = float(np.median(calib_areas))
+                            print(f"  [标定完成] 贴纸参考面积: {sticker_ref_area:.0f} px²")
+                            if sticker_ref_area < 50:
+                                print(f"  [警告] 参考面积过小（{sticker_ref_area:.0f}px²），贴纸可能未被检测到")
+                        cv2.putText(frame,
+                                    f"Calibrating... {len(calib_areas)}/{STICKER_CALIB_FRAMES}",
+                                    (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 165, 255), 2)
+                    else:
+                        cv2.putText(frame, "Palm not detected",
+                                    (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 140, 255), 2)
                 else:
-                    cv2.putText(frame, "Palm not detected",
-                                (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 140, 255), 2)
+                    if has_palm:
+                        ratio = area / sticker_ref_area if sticker_ref_area > 0 else 1.0
+                        contact_label = 1 if ratio < STICKER_OCCLUDE_RATIO else 0
+                        color = (0, 255, 0) if contact_label else (0, 0, 255)
+                        cv2.putText(frame,
+                                    f"Sticker {area}px ({ratio:.2f})  "
+                                    f"{'CONTACT' if contact_label else 'IDLE'}",
+                                    (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                    else:
+                        contact_label = 0
+                        cv2.putText(frame, "Palm not detected",
+                                    (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 140, 255), 2)
             else:
-                if has_palm:
-                    ratio = area / sticker_ref_area if sticker_ref_area > 0 else 1.0
-                    contact_label = 1 if ratio < STICKER_OCCLUDE_RATIO else 0
+                contact_label = 1 if label_val else 0
+                if not no_vis:
                     color = (0, 255, 0) if contact_label else (0, 0, 255)
                     cv2.putText(frame,
-                                f"Sticker {area}px ({ratio:.2f})  "
-                                f"{'CONTACT' if contact_label else 'IDLE'}",
+                                f"PalmPad label: {'CONTACT' if contact_label else 'IDLE'}",
                                 (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-                else:
-                    contact_label = 0
-                    cv2.putText(frame, "Palm not detected",
-                                (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 140, 255), 2)
 
             # ── 调试信息 ──────────────────────────────────────────────────
             if dist_raw is not None:
@@ -356,10 +413,41 @@ def run_collect(subject: str, data_dir: str,
                             f"shadow={shadow_score:.1f}  flow={flow_mag:.2f}",
                             (20, 115), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 50), 2)
 
-            cv2.putText(frame, f"Frame {frame_id}  Subject: {subject}",
-                        (20, frame.shape[0] - 20),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (150, 150, 150), 1)
-            cv2.imshow("Exp-A1 Collect", frame)
+            if not no_vis:
+                # ── 绘制手部骨架 ────────────────────────────────
+                h, w = frame.shape[:2]
+                
+                # 绘制关键点和连接线
+                if detector.write_lm or detector.palm_lm:
+                    hand_lm = detector.write_lm or detector.palm_lm
+                    lm_points = [(lm.x * w, lm.y * h) for lm in hand_lm.landmark]
+                    
+                    # 连接线（MediaPipe 标准）
+                    connections = [
+                        (0, 1), (1, 2), (2, 3), (3, 4),
+                        (0, 5), (5, 6), (6, 7), (7, 8),
+                        (0, 9), (9, 10), (10, 11), (11, 12),
+                        (0, 13), (13, 14), (14, 15), (15, 16),
+                        (0, 17), (17, 18), (18, 19), (19, 20)
+                    ]
+                    
+                    for i, j in connections:
+                        pt1 = (int(lm_points[i][0]), int(lm_points[i][1]))
+                        pt2 = (int(lm_points[j][0]), int(lm_points[j][1]))
+                        cv2.line(frame, pt1, pt2, (100, 150, 200), 2)
+                    
+                    # 关键点圆圈
+                    for i, (x, y) in enumerate(lm_points):
+                        pt = (int(x), int(y))
+                        if i == 8:  # 食指指尖（接触检测点）
+                            cv2.circle(frame, pt, 6, (0, 255, 0), -1)
+                        else:
+                            cv2.circle(frame, pt, 3, (255, 100, 0), -1)
+                
+                cv2.putText(frame, f"Frame {frame_id}  Subject: {subject}",
+                            (20, frame.shape[0] - 20),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (150, 150, 150), 1)
+                cv2.imshow("Exp-A1 Collect", frame)
 
             # ── 写入 CSV ──────────────────────────────────────────────────
             row = {
@@ -388,20 +476,27 @@ def run_collect(subject: str, data_dir: str,
                 row[f'lm_{i}_y'] = f'{lm_flat[i*3+1]:.6f}'
                 row[f'lm_{i}_z'] = f'{lm_flat[i*3+2]:.6f}'
             writer.writerow(row)
-            video_writer.write(raw_frame)
+            if video_writer is not None:
+                video_writer.write(raw_frame)
 
             prev_gray = frame_gray.copy()
             prev_tip_3d = tip_3d
             frame_id += 1
 
-            key = cv2.waitKey(1) & 0xFF
-            if key in (ord('q'), 27):
-                break
+            if not no_vis:
+                key = cv2.waitKey(1) & 0xFF
+                if key in (ord('q'), 27):
+                    break
+
+    if label_mode == 'palmpad' and len(label_list) != frame_id:
+        print(f"[警告] 标签帧数({len(label_list)})与视频帧数({frame_id})不一致")
 
     cap.release()
     if video_writer is not None:
         video_writer.release()
-    cv2.destroyAllWindows()
+    if not no_vis:
+        cv2.destroyAllWindows()
     detector.reset()
     print(f"  数据已保存: {out_csv}  ({frame_id} 帧)")
-    print(f"  原视频已保存: {out_video}")
+    if save_raw_video:
+        print(f"  原视频已保存: {out_video}")
