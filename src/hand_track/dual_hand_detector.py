@@ -146,6 +146,9 @@ class DualHandDetector:
             self.hover_result.distance,
             self.frame_cnt,
         )
+        # 用状态机的最终平滑判定回写 hover detector 的内部状态，避免 raw_contact
+        # 在防抖窗口内抖动时，_in_contact 自更新导致进/退逻辑反复切换。
+        self._hover_det.set_contact_state(self._contact_sm.is_contact)
         self.is_writing = (
             self.contact_result.state == ContactState.CONTACT
             and (not self._still_hold)

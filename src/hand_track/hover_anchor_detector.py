@@ -191,6 +191,10 @@ class HoverAnchorDetector:
             z_vec=np.zeros(len(feat)),
         )
 
+    def set_contact_state(self, is_contact: bool) -> None:
+        """由 ContactStateMachine 的最终判定回写，保持 _in_contact 与平滑状态同步。"""
+        self._in_contact = is_contact
+
     def _do_detecting(self, feat: np.ndarray) -> HoverDetectResult:
         """在线检测：以 4 维归一化距离 + 方向约束判定接触。"""
         z = self._normalize(feat)
@@ -207,7 +211,7 @@ class HoverAnchorDetector:
         else:
             raw_contact = D > exit_tau  # 退出时不检查方向，避免卡住
 
-        self._in_contact = raw_contact
+        # 不再用 raw_contact 自更新；由外部 set_contact_state() 在状态机输出后回写。
 
         return HoverDetectResult(
             phase='ready', progress=1.0,

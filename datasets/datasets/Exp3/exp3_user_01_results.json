@@ -1,0 +1,293 @@
+{
+  "model": "gpt-4.1",
+  "summary": {
+    "LEVEL1": {
+      "word_acc": 0.65,
+      "char_acc": 0.65,
+      "records": [
+        {
+          "target": "M",
+          "pred": "M",
+          "correct": true
+        },
+        {
+          "target": "1",
+          "pred": "7",
+          "correct": false
+        },
+        {
+          "target": "1",
+          "pred": "1",
+          "correct": true
+        },
+        {
+          "target": "A",
+          "pred": "A",
+          "correct": true
+        },
+        {
+          "target": "M",
+          "pred": "M",
+          "correct": true
+        },
+        {
+          "target": "K",
+          "pred": "K",
+          "correct": true
+        },
+        {
+          "target": "7",
+          "pred": "7",
+          "correct": true
+        },
+        {
+          "target": "A",
+          "pred": "K",
+          "correct": false
+        },
+        {
+          "target": "Z",
+          "pred": "Z",
+          "correct": true
+        },
+        {
+          "target": "Y",
+          "pred": "Y",
+          "correct": true
+        },
+        {
+          "target": "Y",
+          "pred": "K",
+          "correct": false
+        },
+        {
+          "target": "L",
+          "pred": "J",
+          "correct": false
+        },
+        {
+          "target": "7",
+          "pred": "7",
+          "correct": true
+        },
+        {
+          "target": "Z",
+          "pred": "Z",
+          "correct": true
+        },
+        {
+          "target": "K",
+          "pred": "K",
+          "correct": true
+        },
+        {
+          "target": "W",
+          "pred": "W",
+          "correct": true
+        },
+        {
+          "target": "L",
+          "pred": "K",
+          "correct": false
+        },
+        {
+          "target": "B",
+          "pred": "B",
+          "correct": true
+        },
+        {
+          "target": "W",
+          "pred": "N",
+          "correct": false
+        },
+        {
+          "target": "B",
+          "pred": "F",
+          "correct": false
+        }
+      ]
+    },
+    "LEVEL2": {
+      "word_acc": 0.3103,
+      "char_acc": 0.3916,
+      "records": [
+        {
+          "target": "coalition",
+          "pred": "decision",
+          "correct": false
+        },
+        {
+          "target": "pen",
+          "pred": "pen",
+          "correct": true
+        },
+        {
+          "target": "tried",
+          "pred": "fred",
+          "correct": false
+        },
+        {
+          "target": "needed",
+          "pred": "reded",
+          "correct": false
+        },
+        {
+          "target": "world",
+          "pred": "courts",
+          "correct": false
+        },
+        {
+          "target": "pig",
+          "pred": "pig",
+          "correct": true
+        },
+        {
+          "target": "goldilocks",
+          "pred": "goldilocks",
+          "correct": true
+        },
+        {
+          "target": "canada",
+          "pred": "canada",
+          "correct": true
+        },
+        {
+          "target": "chamber",
+          "pred": "thanks",
+          "correct": false
+        },
+        {
+          "target": "golfers",
+          "pred": "jobs",
+          "correct": false
+        },
+        {
+          "target": "mortgage",
+          "pred": "amazing",
+          "correct": false
+        },
+        {
+          "target": "and",
+          "pred": "sad",
+          "correct": false
+        },
+        {
+          "target": "spill",
+          "pred": "you",
+          "correct": false
+        },
+        {
+          "target": "killer",
+          "pred": "fuller",
+          "correct": false
+        },
+        {
+          "target": "speak",
+          "pred": "example",
+          "correct": false
+        },
+        {
+          "target": "smart",
+          "pred": "smart",
+          "correct": true
+        },
+        {
+          "target": "lovely",
+          "pred": "luckily",
+          "correct": false
+        },
+        {
+          "target": "forest",
+          "pred": "sunset",
+          "correct": false
+        },
+        {
+          "target": "safety",
+          "pred": "safety",
+          "correct": true
+        },
+        {
+          "target": "person",
+          "pred": "pizza",
+          "correct": false
+        },
+        {
+          "target": "patio",
+          "pred": "patio",
+          "correct": true
+        },
+        {
+          "target": "having",
+          "pred": "jump",
+          "correct": false
+        },
+        {
+          "target": "party",
+          "pred": "party",
+          "correct": true
+        },
+        {
+          "target": "months",
+          "pred": "index",
+          "correct": false
+        },
+        {
+          "target": "doors",
+          "pred": "courts",
+          "correct": false
+        },
+        {
+          "target": "jacket",
+          "pred": "gun",
+          "correct": false
+        },
+        {
+          "target": "trucks",
+          "pred": "galaxy",
+          "correct": false
+        },
+        {
+          "target": "rings",
+          "pred": "my",
+          "correct": false
+        },
+        {
+          "target": "bears",
+          "pred": "bears",
+          "correct": true
+        }
+      ]
+    },
+    "LEVEL3": {
+      "word_acc": 0.0,
+      "char_acc": 0.1622,
+      "records": [
+        {
+          "target": "provided",
+          "pred": "immediate",
+          "correct": false
+        },
+        {
+          "target": "mortgage",
+          "pred": "prison",
+          "correct": false
+        },
+        {
+          "target": "jumping",
+          "pred": "may",
+          "correct": false
+        },
+        {
+          "target": "prepare",
+          "pred": "foursquare",
+          "correct": false
+        },
+        {
+          "target": "seasons",
+          "pred": "season",
+          "correct": false
+        }
+      ]
+    }
+  }
+}
