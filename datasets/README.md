@@ -140,7 +140,7 @@ strokes (u, v)
                             • u、v 均取补（坐标翻转）
                             • 图像整体旋转 -45°（纠正掌面坐标系偏转）
                             • 红点标记每段笔画起点
-    └─► GPT-4.1 Vision     将图像 Base64 编码后发送给模型
+    └─► Qwen3-VL 本地推理    将图像直接送入本地模型
                             • LEVEL1：识别单个大写字母或数字
                             • LEVEL2/3：从 words.txt 候选词表中选择最匹配的单词
     └─► 结果比对            大小写不敏感，计算词级与字符级准确率
@@ -158,7 +158,7 @@ datasets/datasets/Exp3/exp3_user_01_results.json
 
 ```json
 {
-  "model": "gpt-4.1",
+  "model": "/home/shared_models/workspace/qwen/Qwen3-VL-8B-Instruct",
   "summary": {
     "LEVEL1": {
       "word_acc": 0.80,

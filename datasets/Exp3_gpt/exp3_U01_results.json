@@ -1,5 +1,5 @@
 {
-  "model": "/home/shared_models/workspace/qwen/Qwen3-VL-8B-Instruct",
+  "model": "gpt-5.2",
   "summary": {
     "LEVEL1": {
       "word_acc": 1.0,
@@ -189,40 +189,40 @@
       ]
     },
     "LEVEL2": {
-      "word_acc": 0.7333,
-      "top3_word_acc": 0.8667,
-      "char_acc": 0.9254,
+      "word_acc": 0.5333,
+      "top3_word_acc": 0.6667,
+      "char_acc": 0.8507,
       "records": [
         {
           "target": "windy",
-          "pred": "wind",
+          "pred": "made",
           "top3": [
-            "wind",
-            "win",
-            "windy"
+            "made",
+            "mind",
+            "mail"
           ],
           "correct": false,
-          "top3_correct": true
+          "top3_correct": false
         },
         {
           "target": "fudge",
           "pred": "fudge",
           "top3": [
             "fudge",
-            "cut"
+            "rid"
           ],
           "correct": true,
           "top3_correct": true
         },
         {
           "target": "take",
-          "pred": "cake",
+          "pred": "take",
           "top3": [
-            "cake",
             "take",
-            "ate"
+            "tape",
+            "cake"
           ],
-          "correct": false,
+          "correct": true,
           "top3_correct": true
         },
         {
@@ -230,8 +230,8 @@
           "pred": "folds",
           "top3": [
             "folds",
-            "food",
-            "for"
+            "hold",
+            "hole"
           ],
           "correct": true,
           "top3_correct": true
@@ -241,8 +241,8 @@
           "pred": "stuck",
           "top3": [
             "stuck",
-            "stock",
-            "stop"
+            "still",
+            "stock"
           ],
           "correct": true,
           "top3_correct": true
@@ -252,96 +252,95 @@
           "pred": "love",
           "top3": [
             "love",
-            "low",
-            "lot"
+            "like",
+            "line"
           ],
           "correct": false,
-          "top3_correct": false
+          "top3_correct": true
         },
         {
           "target": "those",
-          "pred": "those",
+          "pred": "these",
           "top3": [
+            "these",
             "those",
-            "that",
-            "the"
+            "there"
           ],
-          "correct": true,
+          "correct": false,
           "top3_correct": true
         },
         {
           "target": "levee",
-          "pred": "levee",
+          "pred": "here",
           "top3": [
-            "levee",
-            "leave",
-            "lens"
-          ],
-          "correct": true,
-          "top3_correct": true
-        },
-        {
-          "target": "spill",
-          "pred": "spot",
-          "top3": [
-            "spot",
-            "sport",
-            "soon"
+            "here",
+            "there",
+            "were"
           ],
           "correct": false,
           "top3_correct": false
+        },
+        {
+          "target": "spill",
+          "pred": "spill",
+          "top3": [
+            "spill",
+            "small",
+            "shall"
+          ],
+          "correct": true,
+          "top3_correct": true
         },
         {
           "target": "care",
           "pred": "care",
           "top3": [
             "care",
-            "are",
-            "at"
+            "cake",
+            "cape"
           ],
           "correct": true,
           "top3_correct": true
         },
         {
           "target": "years",
-          "pred": "years",
+          "pred": "year",
           "top3": [
-            "years",
             "year",
-            "you"
+            "yet"
           ],
-          "correct": true,
-          "top3_correct": true
+          "correct": false,
+          "top3_correct": false
         },
         {
           "target": "does",
-          "pred": "does",
+          "pred": "looks",
           "top3": [
-            "does",
-            "close",
-            "bare"
+            "looks",
+            "look",
+            "loose"
           ],
-          "correct": true,
-          "top3_correct": true
+          "correct": false,
+          "top3_correct": false
         },
         {
           "target": "mask",
-          "pred": "mask",
+          "pred": "much",
           "top3": [
-            "mask",
-            "ask",
-            "was"
+            "much",
+            "music",
+            "must"
           ],
-          "correct": true,
-          "top3_correct": true
+          "correct": false,
+          "top3_correct": false
         },
         {
           "target": "the",
           "pred": "the",
           "top3": [
             "the",
-            "at",
-            "an"
+            "these",
+            "there"
           ],
           "correct": true,
           "top3_correct": true
@@ -351,8 +350,8 @@
           "pred": "stay",
           "top3": [
             "stay",
-            "eat",
-            "see"
+            "step",
+            "stop"
           ],
           "correct": true,
           "top3_correct": true
@@ -360,59 +359,61 @@
       ]
     },
     "LEVEL3": {
-      "word_acc": 0.4,
-      "top3_word_acc": 0.6,
-      "char_acc": 0.6744,
+      "word_acc": 0.2,
+      "top3_word_acc": 0.2,
+      "char_acc": 0.5814,
       "records": [
         {
           "target": "chemical",
-          "pred": "chemistry",
+          "pred": "changed",
           "top3": [
-            "chemistry",
-            "chemical",
-            "chancellor"
+            "changed",
+            "handled",
+            "chamber"
           ],
           "correct": false,
-          "top3_correct": true
+          "top3_correct": false
         },
         {
           "target": "coronation",
-          "pred": "coronation",
+          "pred": "construction",
           "top3": [
-            "coronation",
-            "comment",
-            "cannot"
+            "construction",
+            "concentrate",
+            "correction"
           ],
-          "correct": true,
-          "top3_correct": true
+          "correct": false,
+          "top3_correct": false
         },
         {
           "target": "superman",
           "pred": "superman",
           "top3": [
-            "superman"
+            "superman",
+            "sunday",
+            "succeed"
           ],
           "correct": true,
           "top3_correct": true
         },
         {
           "target": "interesting",
-          "pred": "acceptance",
+          "pred": "maternity",
           "top3": [
-            "acceptance",
-            "astonishment",
-            "coronation"
+            "maternity",
+            "machinery",
+            "majesty"
           ],
           "correct": false,
           "top3_correct": false
         },
         {
           "target": "profit",
-          "pred": "accept",
+          "pred": "problem",
           "top3": [
-            "accept",
-            "acceptance",
-            "account"
+            "problem",
+            "problems",
+            "proposal"
           ],
           "correct": false,
           "top3_correct": false

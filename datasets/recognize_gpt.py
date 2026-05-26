@@ -1,25 +1,18 @@
 import argparse
+import base64
 import json
 import math
 import os
-import re
 from typing import Optional
 
 import cv2
 import numpy as np
-import torch
-from PIL import Image
-from qwen_vl_utils import process_vision_info
-from transformers import AutoProcessor, Qwen3VLForConditionalGeneration
+from openai import OpenAI
 
-# ── Qwen 本地模型配置 ─────────────────────────────────────────────────────────
-_DEFAULT_QWEN_MODEL_PATH = os.environ.get(
-    "QWEN_MODEL_PATH",
-    "/home/shared_models/workspace/qwen/Qwen3-VL-8B-Instruct",
-)
-_DEFAULT_DEVICE_MAP = os.environ.get("QWEN_DEVICE_MAP", "auto")
-_DEFAULT_DTYPE = os.environ.get("QWEN_DTYPE", "auto")
-_DEFAULT_ATTN_IMPL = os.environ.get("QWEN_ATTN_IMPL")
+# ── API 配置 ──────────────────────────────────────────────────────────────────
+_API_KEY  = "sk-6vAtYqBsNcAnnjcLTU4qZyXARJmzL5y5W6cy4a03Tx3NlYe2"
+_BASE_URL = "https://api.chatanywhere.tech/v1"
+_MODEL    = "gpt-5.2"
 
 # ── 候选词表 ──────────────────────────────────────────────────────────────────
 _WORDS_FILE = os.path.join(os.path.dirname(__file__), "words.txt")
@@ -82,29 +75,9 @@ def render_strokes(strokes: list) -> np.ndarray:
     return img
 
 
-def _resolve_dtype(dtype: str):
-    if dtype is None:
-        return None
-    if isinstance(dtype, str):
-        key = dtype.lower()
-        if key in ("auto",):
-            return "auto"
-        if key in ("float16", "fp16"):
-            return torch.float16
-        if key in ("bfloat16", "bf16"):
-            return torch.bfloat16
-        if key in ("float32", "fp32"):
-            return torch.float32
-    return dtype
-
-
-def _load_qwen(model_path: str, device_map: str, dtype: str, attn_impl: Optional[str]):
-    kwargs = {"device_map": device_map, "dtype": _resolve_dtype(dtype)}
-    if attn_impl:
-        kwargs["attn_implementation"] = attn_impl
-    model = Qwen3VLForConditionalGeneration.from_pretrained(model_path, **kwargs)
-    processor = AutoProcessor.from_pretrained(model_path)
-    return model, processor
+def img_to_b64(img: np.ndarray) -> str:
+    _, buf = cv2.imencode('.png', img)
+    return base64.standard_b64encode(buf.tobytes()).decode()
 
 
 # ── 提示词 ───────────────────────────────────────────────────────────────────
@@ -159,42 +132,17 @@ _LIST_L2: list = []
 _LIST_L3: list = []
 
 
-def _call(model: Qwen3VLForConditionalGeneration, processor: AutoProcessor, prompt: str, img: np.ndarray) -> str:
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    pil_img = Image.fromarray(img_rgb)
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {"type": "image", "image": pil_img},
-                {"type": "text", "text": prompt},
-            ],
-        }
-    ]
-    text = processor.apply_chat_template(
-        messages, tokenize=False, add_generation_prompt=True, enable_thinking=True
+def _call(client: OpenAI, prompt: str, img: np.ndarray) -> str:
+    resp = client.chat.completions.create(
+        model=_MODEL,
+        max_tokens=64,
+        temperature=0,
+        messages=[{"role": "user", "content": [
+            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_to_b64(img)}"}},
+            {"type": "text", "text": prompt},
+        ]}],
     )
-    image_inputs, video_inputs = process_vision_info(messages)
-    inputs = processor(
-        text=[text],
-        images=image_inputs,
-        videos=video_inputs,
-        padding=True,
-        return_tensors="pt",
-    ).to(model.device)
-    with torch.inference_mode():
-        generated_ids = model.generate(**inputs, max_new_tokens=2048, do_sample=False)
-    generated_ids_trimmed = [
-        out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
-    ]
-    output_text = processor.batch_decode(
-        generated_ids_trimmed, skip_special_tokens=False, clean_up_tokenization_spaces=False
-    )
-    raw = output_text[0] if output_text else ""
-    if "</think>" in raw:
-        raw = raw.split("</think>", 1)[1]
-    raw = re.sub(r"<\|[^|]*\|>", "", raw)
-    return raw.strip()
+    return (resp.choices[0].message.content or "").strip()
 
 
 def _edit_dist(a: str, b: str) -> int:
@@ -226,36 +174,27 @@ def _parse_top3(raw: str, word_set: set, word_list: list[str]) -> list[str]:
     return result
 
 
-def recognize(model: Qwen3VLForConditionalGeneration, processor: AutoProcessor, img: np.ndarray, level: str, target: str):
+def recognize(client: OpenAI, img: np.ndarray, level: str, target: str):
     if level == "LEVEL1":
-        return _call(model, processor, _PROMPT_DIGIT if target.isdigit() else _PROMPT_LETTER, img)
+        return _call(client, _PROMPT_DIGIT if target.isdigit() else _PROMPT_LETTER, img)
 
     prompt   = _PROMPT_LEVEL2.format(word_list=_WORD_LIST_L2) if level == "LEVEL2" \
                else _PROMPT_LEVEL3.format(word_list=_WORD_LIST_L3)
     word_set  = _WORDS_L2  if level == "LEVEL2" else _WORDS_L3
     word_list = _LIST_L2   if level == "LEVEL2" else _LIST_L3
 
-    raw = _call(model, processor, prompt, img)
+    raw = _call(client, prompt, img)
     print(f"  [RAW] {raw!r}")
     return _parse_top3(raw, word_set, word_list)
 
 
 # ── 主评估逻辑 ─────────────────────────────────────────────────────────────────
 
-def evaluate(
-    data_path: str,
-    level_filter: Optional[str] = None,
-    save_dir: Optional[str] = None,
-    rotate: float = 0.0,
-    model_path: str = _DEFAULT_QWEN_MODEL_PATH,
-    device_map: str = _DEFAULT_DEVICE_MAP,
-    dtype: str = _DEFAULT_DTYPE,
-    attn_impl: Optional[str] = _DEFAULT_ATTN_IMPL,
-):
+def evaluate(data_path: str, level_filter: Optional[str] = None, save_dir: Optional[str] = None, rotate: float = 0.0):
     global _WORD_LIST_L2, _WORD_LIST_L3, _WORDS_L2, _WORDS_L3, _LIST_L2, _LIST_L3, _ROTATE_DEG
     _WORD_LIST_L2, _WORD_LIST_L3, _WORDS_L2, _WORDS_L3, _LIST_L2, _LIST_L3 = _load_words(_WORDS_FILE)
     _ROTATE_DEG = rotate
-    model, processor = _load_qwen(model_path=model_path, device_map=device_map, dtype=dtype, attn_impl=attn_impl)
+    client = OpenAI(api_key=_API_KEY, base_url=_BASE_URL)
 
     with open(data_path, encoding='utf-8') as f:
         records = json.load(f)
@@ -286,12 +225,12 @@ def evaluate(
     print(f"[Phase 1] 渲染完成，共 {len(items)} 张 → {save_dir}")
 
     # ── 阶段二：逐张送 AI 识别 ────────────────────────────────────────────────
-    print(f"[Phase 2] 开始识别 (model={model_path}) ...")
+    print(f"[Phase 2] 开始识别 (model={_MODEL}) ...")
     buckets: dict[str, list] = {"LEVEL1": [], "LEVEL2": [], "LEVEL3": []}
 
     for item in items:
         level, target, img = item["level"], item["target"], item["img"]
-        result = recognize(model, processor, img, level, target)
+        result  = recognize(client, img, level, target)
 
         if isinstance(result, list):
             pred      = result[0]
@@ -385,55 +324,19 @@ def evaluate(
             "records": lst,
         }
     with open(result_path, "w", encoding="utf-8") as f:
-        json.dump({"model": model_path, "summary": summary}, f, ensure_ascii=False, indent=2)
+        json.dump({"model": _MODEL, "summary": summary}, f, ensure_ascii=False, indent=2)
     print(f"\n结果已保存 → {result_path}")
-
-
-_DEFAULT_EXP3_DIR = os.path.join(os.path.dirname(__file__), "Exp3")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Air-writing recognition via Vision LLM")
-    parser.add_argument("data", nargs="?", default=None,
-                        help="Path to exp3_U**.json; omit to process all files in Exp3/")
+    parser.add_argument("data",          help="Path to exp3_userXX.json")
     parser.add_argument("--level",       default=None, choices=["LEVEL1", "LEVEL2", "LEVEL3"])
     parser.add_argument("--save-images", metavar="DIR", default=None)
     parser.add_argument("--rotate",      type=float, default=0,
                         help="Clockwise rotation in degrees (default: 0)")
-    parser.add_argument("--model-path", default=_DEFAULT_QWEN_MODEL_PATH,
-                        help="Local Qwen3-VL model path (default: $QWEN_MODEL_PATH)")
-    parser.add_argument("--device-map", default=_DEFAULT_DEVICE_MAP,
-                        help="Hugging Face device_map setting (default: auto)")
-    parser.add_argument("--dtype", default=_DEFAULT_DTYPE,
-                        help="Model dtype (default: auto)")
-    parser.add_argument("--attn-impl", default=_DEFAULT_ATTN_IMPL,
-                        help="Attention implementation (e.g. flash_attention_2)")
     args = parser.parse_args()
-
-    if args.data is not None:
-        data_files = [args.data]
-    else:
-        import glob
-        data_files = sorted(
-            f for f in glob.glob(os.path.join(_DEFAULT_EXP3_DIR, "exp3_U*.json"))
-            if not os.path.basename(f).endswith("_results.json")
-        )
-        if not data_files:
-            parser.error(f"No exp3_U*.json files found in {_DEFAULT_EXP3_DIR}")
-        print(f"找到 {len(data_files)} 个文件: {[os.path.basename(f) for f in data_files]}")
-
-    for data_path in data_files:
-        print(f"\n{'='*60}\n处理: {data_path}\n{'='*60}")
-        evaluate(
-            data_path,
-            level_filter=args.level,
-            save_dir=args.save_images,
-            rotate=args.rotate,
-            model_path=args.model_path,
-            device_map=args.device_map,
-            dtype=args.dtype,
-            attn_impl=args.attn_impl,
-        )
+    evaluate(args.data, level_filter=args.level, save_dir=args.save_images, rotate=args.rotate)
 
 
 if __name__ == "__main__":

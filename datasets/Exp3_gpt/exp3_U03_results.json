@@ -1,19 +1,19 @@
 {
-  "model": "/home/shared_models/workspace/qwen/Qwen3-VL-8B-Instruct",
+  "model": "gpt-5.2",
   "summary": {
     "LEVEL1": {
-      "word_acc": 0.8,
-      "top3_word_acc": 0.8,
-      "char_acc": 0.8,
+      "word_acc": 0.85,
+      "top3_word_acc": 0.85,
+      "char_acc": 0.85,
       "records": [
         {
           "target": "U",
-          "pred": "U",
+          "pred": "J",
           "top3": [
-            "U"
+            "J"
           ],
-          "correct": true,
-          "top3_correct": true
+          "correct": false,
+          "top3_correct": false
         },
         {
           "target": "M",
@@ -44,12 +44,12 @@
         },
         {
           "target": "X",
-          "pred": "X",
+          "pred": "K",
           "top3": [
-            "X"
+            "K"
           ],
-          "correct": true,
-          "top3_correct": true
+          "correct": false,
+          "top3_correct": false
         },
         {
           "target": "X",
@@ -80,12 +80,12 @@
         },
         {
           "target": "0",
-          "pred": "8",
+          "pred": "0",
           "top3": [
-            "8"
+            "0"
           ],
-          "correct": false,
-          "top3_correct": false
+          "correct": true,
+          "top3_correct": true
         },
         {
           "target": "2",
@@ -98,18 +98,18 @@
         },
         {
           "target": "D",
-          "pred": "P",
+          "pred": "D",
           "top3": [
-            "P"
+            "D"
           ],
-          "correct": false,
-          "top3_correct": false
+          "correct": true,
+          "top3_correct": true
         },
         {
           "target": "D",
-          "pred": "A",
+          "pred": "U",
           "top3": [
-            "A"
+            "U"
           ],
           "correct": false,
           "top3_correct": false
@@ -125,12 +125,12 @@
         },
         {
           "target": "0",
-          "pred": "8",
+          "pred": "0",
           "top3": [
-            "8"
+            "0"
           ],
-          "correct": false,
-          "top3_correct": false
+          "correct": true,
+          "top3_correct": true
         },
         {
           "target": "N",
@@ -189,49 +189,50 @@
       ]
     },
     "LEVEL2": {
-      "word_acc": 0.4,
+      "word_acc": 0.4667,
       "top3_word_acc": 0.5333,
-      "char_acc": 0.6562,
+      "char_acc": 0.6406,
       "records": [
         {
           "target": "late",
-          "pred": "ate",
+          "pred": "late",
           "top3": [
-            "ate",
-            "day"
-          ],
-          "correct": false,
-          "top3_correct": false
-        },
-        {
-          "target": "loose",
-          "pred": "loose",
-          "top3": [
-            "loose",
-            "close",
-            "lot"
+            "late",
+            "take",
+            "hate"
           ],
           "correct": true,
           "top3_correct": true
         },
         {
-          "target": "tumor",
-          "pred": "few",
+          "target": "loose",
+          "pred": "love",
           "top3": [
-            "few",
-            "fine",
-            "fire"
+            "love",
+            "loose",
+            "close"
           ],
           "correct": false,
-          "top3_correct": false
+          "top3_correct": true
+        },
+        {
+          "target": "tumor",
+          "pred": "tumor",
+          "top3": [
+            "tumor",
+            "turn",
+            "tire"
+          ],
+          "correct": true,
+          "top3_correct": true
         },
         {
           "target": "too",
-          "pred": "be",
+          "pred": "bike",
           "top3": [
-            "be",
-            "see",
-            "me"
+            "bike",
+            "best",
+            "bite"
           ],
           "correct": false,
           "top3_correct": false
@@ -241,118 +242,116 @@
           "pred": "daily",
           "top3": [
             "daily",
-            "bad",
-            "day"
+            "walk",
+            "all"
           ],
           "correct": true,
           "top3_correct": true
         },
         {
           "target": "pizza",
-          "pred": "place",
+          "pred": "pizza",
           "top3": [
-            "place",
-            "play",
-            "pile"
+            "pizza",
+            "prize",
+            "place"
           ],
-          "correct": false,
-          "top3_correct": false
+          "correct": true,
+          "top3_correct": true
         },
         {
           "target": "voice",
-          "pred": "vote",
+          "pred": "use",
           "top3": [
-            "vote",
-            "voice",
-            "sad"
+            "use",
+            "sure",
+            "nice"
           ],
           "correct": false,
-          "top3_correct": true
+          "top3_correct": false
         },
         {
           "target": "all",
           "pred": "all",
           "top3": [
             "all",
-            "am",
-            "an"
+            "ask",
+            "are"
           ],
           "correct": true,
           "top3_correct": true
         },
         {
           "target": "much",
-          "pred": "much",
+          "pred": "march",
           "top3": [
-            "much",
-            "must",
-            "more"
+            "march",
+            "mary",
+            "made"
           ],
-          "correct": true,
-          "top3_correct": true
+          "correct": false,
+          "top3_correct": false
         },
         {
           "target": "ahead",
-          "pred": "ahead",
+          "pred": "idea",
           "top3": [
-            "ahead",
-            "ask",
-            "ate"
+            "idea",
+            "ides"
           ],
-          "correct": true,
-          "top3_correct": true
+          "correct": false,
+          "top3_correct": false
         },
         {
           "target": "ten",
-          "pred": "been",
+          "pred": "team",
           "top3": [
-            "been",
-            "pen",
-            "ten"
+            "team",
+            "tell"
           ],
           "correct": false,
-          "top3_correct": true
+          "top3_correct": false
         },
         {
           "target": "panel",
           "pred": "panel",
           "top3": [
             "panel",
-            "an",
-            "bad"
+            "paid",
+            "pen"
           ],
           "correct": true,
           "top3_correct": true
         },
         {
           "target": "run",
-          "pred": "fun",
+          "pred": "four",
           "top3": [
-            "fun",
-            "for",
-            "fire"
+            "four",
+            "from",
+            "found"
           ],
           "correct": false,
           "top3_correct": false
         },
         {
           "target": "fans",
-          "pred": "fun",
+          "pred": "fans",
           "top3": [
-            "fun",
-            "few",
-            "for"
+            "fans",
+            "feel",
+            "find"
           ],
-          "correct": false,
-          "top3_correct": false
+          "correct": true,
+          "top3_correct": true
         },
         {
           "target": "crown",
-          "pred": "be",
+          "pred": "at",
           "top3": [
-            "be",
-            "see",
-            "me"
+            "at",
+            "as",
+            "an"
           ],
           "correct": false,
           "top3_correct": false
@@ -360,59 +359,64 @@
       ]
     },
     "LEVEL3": {
-      "word_acc": 0.4,
+      "word_acc": 0.2,
       "top3_word_acc": 0.4,
-      "char_acc": 0.5405,
+      "char_acc": 0.4054,
       "records": [
         {
           "target": "lesson",
           "pred": "lesson",
           "top3": [
             "lesson",
-            "better"
+            "letters",
+            "leaving"
           ],
           "correct": true,
           "top3_correct": true
         },
         {
           "target": "olympic",
-          "pred": "sympathy",
+          "pred": "writing",
           "top3": [
-            "sympathy"
+            "writing",
+            "working",
+            "around"
           ],
           "correct": false,
           "top3_correct": false
         },
         {
           "target": "granite",
-          "pred": "around",
+          "pred": "shrine",
           "top3": [
+            "shrine",
             "around",
-            "grocery",
-            "growing"
+            "accept"
           ],
           "correct": false,
           "top3_correct": false
         },
         {
           "target": "chocolate",
-          "pred": "chocolate",
+          "pred": "dolphins",
           "top3": [
-            "chocolate"
-          ],
-          "correct": true,
-          "top3_correct": true
-        },
-        {
-          "target": "detector",
-          "pred": "accept",
-          "top3": [
-            "accept",
-            "acceptance",
-            "account"
+            "dolphins",
+            "double",
+            "difficult"
           ],
           "correct": false,
           "top3_correct": false
+        },
+        {
+          "target": "detector",
+          "pred": "details",
+          "top3": [
+            "details",
+            "detector",
+            "delivery"
+          ],
+          "correct": false,
+          "top3_correct": true
         }
       ]
     }

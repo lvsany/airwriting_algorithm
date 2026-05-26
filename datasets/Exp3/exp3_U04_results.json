@@ -1,0 +1,479 @@
+{
+  "model": "/home/shared_models/workspace/qwen/Qwen3-VL-8B-Instruct",
+  "summary": {
+    "LEVEL1": {
+      "word_acc": 0.85,
+      "top3_word_acc": 0.85,
+      "char_acc": 0.85,
+      "records": [
+        {
+          "target": "9",
+          "pred": "9",
+          "top3": [
+            "9"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "M",
+          "pred": "M",
+          "top3": [
+            "M"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "X",
+          "pred": "X",
+          "top3": [
+            "X"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "A",
+          "pred": "K",
+          "top3": [
+            "K"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "Z",
+          "pred": "Z",
+          "top3": [
+            "Z"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "X",
+          "pred": "H",
+          "top3": [
+            "H"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "4",
+          "pred": "4",
+          "top3": [
+            "4"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "M",
+          "pred": "M",
+          "top3": [
+            "M"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "J",
+          "pred": "J",
+          "top3": [
+            "J"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "B",
+          "pred": "B",
+          "top3": [
+            "B"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "B",
+          "pred": "B",
+          "top3": [
+            "B"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "G",
+          "pred": "G",
+          "top3": [
+            "G"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "H",
+          "pred": "H",
+          "top3": [
+            "H"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "G",
+          "pred": "G",
+          "top3": [
+            "G"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "9",
+          "pred": "0",
+          "top3": [
+            "0"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "H",
+          "pred": "H",
+          "top3": [
+            "H"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "A",
+          "pred": "A",
+          "top3": [
+            "A"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "4",
+          "pred": "4",
+          "top3": [
+            "4"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "Z",
+          "pred": "Z",
+          "top3": [
+            "Z"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "J",
+          "pred": "J",
+          "top3": [
+            "J"
+          ],
+          "correct": true,
+          "top3_correct": true
+        }
+      ]
+    },
+    "LEVEL2": {
+      "word_acc": 0.4,
+      "top3_word_acc": 0.4667,
+      "char_acc": 0.597,
+      "records": [
+        {
+          "target": "apple",
+          "pred": "apple",
+          "top3": [
+            "apple",
+            "at",
+            "as"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "bring",
+          "pred": "young",
+          "top3": [
+            "young",
+            "you",
+            "your"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "hopes",
+          "pred": "hopes",
+          "top3": [
+            "hopes",
+            "hole",
+            "house"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "user",
+          "pred": "user",
+          "top3": [
+            "user",
+            "use",
+            "us"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "prize",
+          "pred": "yes",
+          "top3": [
+            "yes",
+            "you",
+            "are"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "play",
+          "pred": "play",
+          "top3": [
+            "play",
+            "at",
+            "am"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "took",
+          "pred": "look",
+          "top3": [
+            "look",
+            "books",
+            "took"
+          ],
+          "correct": false,
+          "top3_correct": true
+        },
+        {
+          "target": "court",
+          "pred": "eat",
+          "top3": [
+            "eat",
+            "can",
+            "am"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "bill",
+          "pred": "be",
+          "top3": [
+            "be",
+            "are",
+            "is"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "take",
+          "pred": "back",
+          "top3": [
+            "back",
+            "bad",
+            "ball"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "after",
+          "pred": "after",
+          "top3": [
+            "after",
+            "all",
+            "am"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "rings",
+          "pred": "be",
+          "top3": [
+            "be",
+            "see",
+            "me"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "peek",
+          "pred": "peek",
+          "top3": [
+            "peek"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "long",
+          "pred": "vote",
+          "top3": [
+            "vote",
+            "dow",
+            "war"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "cape",
+          "pred": "can",
+          "top3": [
+            "can",
+            "car",
+            "cat"
+          ],
+          "correct": false,
+          "top3_correct": false
+        }
+      ]
+    },
+    "LEVEL3": {
+      "word_acc": 0.8,
+      "top3_word_acc": 0.9,
+      "char_acc": 0.9221,
+      "records": [
+        {
+          "target": "flashing",
+          "pred": "flashing",
+          "top3": [
+            "flashing",
+            "racketball",
+            "football"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "window",
+          "pred": "window",
+          "top3": [
+            "window",
+            "lender",
+            "winners"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "socket",
+          "pred": "beware",
+          "top3": [
+            "beware",
+            "beautiful",
+            "beginning"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "minimum",
+          "pred": "minimum",
+          "top3": [
+            "minimum",
+            "midnight",
+            "mission"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "arguing",
+          "pred": "arguing",
+          "top3": [
+            "arguing",
+            "organization",
+            "chocolate"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "accompanied",
+          "pred": "accompanied",
+          "top3": [
+            "accompanied",
+            "acceptance",
+            "account"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "results",
+          "pred": "results",
+          "top3": [
+            "results",
+            "deserves",
+            "presidents"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "changed",
+          "pred": "changed",
+          "top3": [
+            "changed",
+            "challenged",
+            "acceptance"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "unavailable",
+          "pred": "unacceptable",
+          "top3": [
+            "unacceptable",
+            "unavailable",
+            "understood"
+          ],
+          "correct": false,
+          "top3_correct": true
+        },
+        {
+          "target": "balance",
+          "pred": "balance",
+          "top3": [
+            "balance",
+            "baloney",
+            "racketball"
+          ],
+          "correct": true,
+          "top3_correct": true
+        }
+      ]
+    }
+  }
+}
