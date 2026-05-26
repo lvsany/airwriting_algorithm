@@ -17,12 +17,12 @@ _MODEL    = "gpt-5.4-mini"
 # ── 候选词表 ──────────────────────────────────────────────────────────────────
 _WORDS_FILE = os.path.join(os.path.dirname(__file__), "words.txt")
 
-def _load_words(path: str) -> tuple[str, str, set, set]:
+def _load_words(path: str) -> tuple[str, str, set, set, list, list]:
     with open(path, encoding="utf-8") as f:
         words = [l.strip().lower() for l in f if l.strip() and not l.startswith("#")]
     l2_words = [w for w in words if len(w) < 6]
     l3_words = [w for w in words if len(w) >= 6]
-    return ", ".join(l2_words), ", ".join(l3_words), set(l2_words), set(l3_words)
+    return ", ".join(l2_words), ", ".join(l3_words), set(l2_words), set(l3_words), l2_words, l3_words
 
 # ── 渲染参数 ──────────────────────────────────────────────────────────────────
 _CANVAS = 256
@@ -103,11 +103,14 @@ _PROMPT_LEVEL2 = (
     "This image shows a short English word (fewer than 6 letters) written in the air by tracing on a palm with a fingertip. "
     "The writing may appear cursive, slanted, or slightly distorted. "
     "The blue dot marks the pen-down starting point; reading direction is left to right. "
-    "Candidate list (choose ONLY from these):\n{word_list}\n\n"
+    "Candidate list — you MUST choose ONLY from these exact words, no exceptions:\n{word_list}\n\n"
     "Instructions:\n"
     "1. Estimate the number of letters from the stroke count and word length.\n"
     "2. Identify the starting letter shape near the blue dot.\n"
-    "3. Select 3 DISTINCT candidates from the list ranked by likelihood.\n"
+    "3. Select 3 DISTINCT candidates ranked by likelihood.\n"
+    "CRITICAL: Every word in your answer MUST appear verbatim in the candidate list above. "
+    "Do NOT invent, modify, or use any word not in the list. "
+    "If you are unsure, pick the 3 most similar words from the list.\n"
     "Reply with EXACTLY 3 different words separated by commas, all lowercase. Example: word1, word2, word3"
 )
 
@@ -115,11 +118,14 @@ _PROMPT_LEVEL3 = (
     "This image shows a long English word (6 or more letters) written in the air by tracing on a palm with a fingertip. "
     "The writing may appear cursive, slanted, or slightly distorted. "
     "The blue dot marks the pen-down starting point; reading direction is left to right. "
-    "Candidate list (choose ONLY from these):\n{word_list}\n\n"
+    "Candidate list — you MUST choose ONLY from these exact words, no exceptions:\n{word_list}\n\n"
     "Instructions:\n"
     "1. Estimate the number of letters from the overall word length.\n"
     "2. Identify the starting letter shape near the blue dot.\n"
-    "3. Select 3 DISTINCT candidates from the list ranked by likelihood.\n"
+    "3. Select 3 DISTINCT candidates ranked by likelihood.\n"
+    "CRITICAL: Every word in your answer MUST appear verbatim in the candidate list above. "
+    "Do NOT invent, modify, or use any word not in the list. "
+    "If you are unsure, pick the 3 most similar words from the list.\n"
     "Reply with EXACTLY 3 different words separated by commas, all lowercase. Example: word1, word2, word3"
 )
 
@@ -127,12 +133,15 @@ _WORD_LIST_L2: str = ""
 _WORD_LIST_L3: str = ""
 _WORDS_L2: set = set()
 _WORDS_L3: set = set()
+_LIST_L2: list = []
+_LIST_L3: list = []
 
 
 def _call(client: OpenAI, prompt: str, img: np.ndarray) -> str:
     resp = client.chat.completions.create(
         model=_MODEL,
         max_tokens=64,
+        temperature=0,
         messages=[{"role": "user", "content": [
             {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_to_b64(img)}"}},
             {"type": "text", "text": prompt},
@@ -141,46 +150,54 @@ def _call(client: OpenAI, prompt: str, img: np.ndarray) -> str:
     return (resp.choices[0].message.content or "").strip()
 
 
-def _parse_top3(raw: str, word_set: set) -> list[str]:
-    """解析模型返回的逗号分隔候选词，去重、过滤词表外词，不足3个用词表补充。"""
-    candidates = [w.strip().lower() for w in raw.replace("\n", ",").split(",") if w.strip()]
-    seen, deduped = set(), []
-    for w in candidates:
-        if w in word_set and w not in seen:
-            seen.add(w)
-            deduped.append(w)
-    # 不足3个时从词表里按字母顺序补不重复的词
-    if len(deduped) < 3:
-        for w in sorted(word_set):
-            if w not in seen:
-                seen.add(w)
-                deduped.append(w)
-            if len(deduped) == 3:
-                break
-    return deduped[:3]
+def _edit_dist(a: str, b: str) -> int:
+    m, n = len(a), len(b)
+    dp = list(range(n + 1))
+    for i in range(1, m + 1):
+        prev = dp[0]
+        dp[0] = i
+        for j in range(1, n + 1):
+            tmp = dp[j]
+            dp[j] = prev if a[i-1] == b[j-1] else 1 + min(prev, dp[j], dp[j-1])
+            prev = tmp
+    return dp[n]
+
+
+def _closest(word: str, word_list: list[str]) -> str:
+    return min(word_list, key=lambda w: _edit_dist(word, w))
+
+
+def _parse_top3(raw: str, word_set: set, word_list: list[str]) -> list[str]:
+    """解析模型返回词；词表外的词用编辑距离最近的词表词替换，最终去重取前3。"""
+    tokens = [w.strip().lower() for w in raw.replace("\n", ",").split(",") if w.strip()][:3]
+    result, seen = [], set()
+    for w in tokens:
+        mapped = w if w in word_set else _closest(w, word_list)
+        if mapped not in seen:
+            seen.add(mapped)
+            result.append(mapped)
+    return result
 
 
 def recognize(client: OpenAI, img: np.ndarray, level: str, target: str):
     if level == "LEVEL1":
         return _call(client, _PROMPT_DIGIT if target.isdigit() else _PROMPT_LETTER, img)
 
-    prompt = _PROMPT_LEVEL2.format(word_list=_WORD_LIST_L2) if level == "LEVEL2" \
-        else _PROMPT_LEVEL3.format(word_list=_WORD_LIST_L3)
-    word_set = _WORDS_L2 if level == "LEVEL2" else _WORDS_L3
+    prompt   = _PROMPT_LEVEL2.format(word_list=_WORD_LIST_L2) if level == "LEVEL2" \
+               else _PROMPT_LEVEL3.format(word_list=_WORD_LIST_L3)
+    word_set  = _WORDS_L2  if level == "LEVEL2" else _WORDS_L3
+    word_list = _LIST_L2   if level == "LEVEL2" else _LIST_L3
 
     raw = _call(client, prompt, img)
-    candidates = _parse_top3(raw, word_set)
-    if not candidates[0]:  # 完全解析失败则重试一次
-        raw = _call(client, prompt, img)
-        candidates = _parse_top3(raw, word_set)
-    return candidates
+    print(f"  [RAW] {raw!r}")
+    return _parse_top3(raw, word_set, word_list)
 
 
 # ── 主评估逻辑 ─────────────────────────────────────────────────────────────────
 
 def evaluate(data_path: str, level_filter: Optional[str] = None, save_dir: Optional[str] = None, rotate: float = 0.0):
-    global _WORD_LIST_L2, _WORD_LIST_L3, _WORDS_L2, _WORDS_L3, _ROTATE_DEG
-    _WORD_LIST_L2, _WORD_LIST_L3, _WORDS_L2, _WORDS_L3 = _load_words(_WORDS_FILE)
+    global _WORD_LIST_L2, _WORD_LIST_L3, _WORDS_L2, _WORDS_L3, _LIST_L2, _LIST_L3, _ROTATE_DEG
+    _WORD_LIST_L2, _WORD_LIST_L3, _WORDS_L2, _WORDS_L3, _LIST_L2, _LIST_L3 = _load_words(_WORDS_FILE)
     _ROTATE_DEG = rotate
     client = OpenAI(api_key=_API_KEY, base_url=_BASE_URL)
 
@@ -267,9 +284,9 @@ def evaluate(data_path: str, level_filter: Optional[str] = None, save_dir: Optio
             continue
         ch_ok = ch_n = 0
         for r in lst:
-            ok, n = _char_acc(r['target'], r['pred'])
+            ok = max(_char_acc(r['target'], c)[0] for c in r['top3'])
             ch_ok += ok
-            ch_n  += n
+            ch_n  += len(r['target'])
         total_ch_ok += ch_ok
         total_ch    += ch_n
         print(f"  {lvl:<8s}  {ch_ok}/{ch_n}  ({ch_ok/ch_n*100:.1f}%)")
@@ -302,8 +319,8 @@ def evaluate(data_path: str, level_filter: Optional[str] = None, save_dir: Optio
         word_ok = sum(r['correct'] for r in lst)
         ch_ok = ch_n = 0
         for r in lst:
-            ok, n = _char_acc(r['target'], r['pred'])
-            ch_ok += ok; ch_n += n
+            ok = max(_char_acc(r['target'], c)[0] for c in r['top3'])
+            ch_ok += ok; ch_n += len(r['target'])
         top3_ok = sum(r['top3_correct'] for r in lst)
         summary[lvl] = {
             "word_acc":      round(word_ok / len(lst), 4),

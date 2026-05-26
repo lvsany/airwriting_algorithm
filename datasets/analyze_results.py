@@ -218,7 +218,7 @@ def print_overall(file_results: list):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dir", default="datasets/datasets/Exp3",
+    parser.add_argument("--dir", default="Exp3",
                         help="Directory containing *_results.json files")
     args = parser.parse_args()
 

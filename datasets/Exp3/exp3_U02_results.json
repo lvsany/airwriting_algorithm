@@ -109,82 +109,232 @@
     },
     "LEVEL2": {
       "word_acc": 0.4,
+      "top3_word_acc": 0.5333,
       "char_acc": 0.625,
       "records": [
         {
           "target": "laugh",
-          "pred": "again",
-          "correct": false
+          "pred": "laugh",
+          "top3": [
+            "laugh",
+            "long",
+            "land"
+          ],
+          "correct": true,
+          "top3_correct": true
         },
         {
           "target": "else",
           "pred": "else",
-          "correct": true
+          "top3": [
+            "else",
+            "help",
+            "fell"
+          ],
+          "correct": true,
+          "top3_correct": true
         },
         {
           "target": "need",
           "pred": "need",
-          "correct": true
+          "top3": [
+            "need",
+            "news",
+            "nice"
+          ],
+          "correct": true,
+          "top3_correct": true
         },
         {
           "target": "panel",
-          "pred": "panel",
-          "correct": true
+          "pred": "pimp",
+          "top3": [
+            "pimp",
+            "panel",
+            "pen"
+          ],
+          "correct": false,
+          "top3_correct": true
         },
         {
           "target": "tests",
-          "pred": "yes",
-          "correct": false
+          "pred": "face",
+          "top3": [
+            "face",
+            "car"
+          ],
+          "correct": false,
+          "top3_correct": false
         },
         {
           "target": "ate",
-          "pred": "about",
-          "correct": false
+          "pred": "one",
+          "top3": [
+            "one",
+            "more",
+            "were"
+          ],
+          "correct": false,
+          "top3_correct": false
         },
         {
           "target": "sum",
-          "pred": "walk",
-          "correct": false
+          "pred": "yap",
+          "top3": [
+            "yap",
+            "up",
+            "yes"
+          ],
+          "correct": false,
+          "top3_correct": false
         },
         {
           "target": "many",
           "pred": "windy",
-          "correct": false
+          "top3": [
+            "windy",
+            "mind",
+            "found"
+          ],
+          "correct": false,
+          "top3_correct": false
         },
         {
           "target": "bases",
           "pred": "bases",
-          "correct": true
+          "top3": [
+            "bases",
+            "looks",
+            "books"
+          ],
+          "correct": true,
+          "top3_correct": true
         },
         {
           "target": "these",
           "pred": "these",
-          "correct": true
+          "top3": [
+            "these",
+            "there",
+            "three"
+          ],
+          "correct": true,
+          "top3_correct": true
         },
         {
           "target": "lens",
-          "pred": "hens",
-          "correct": false
+          "pred": "left",
+          "top3": [
+            "left",
+            "lens",
+            "help"
+          ],
+          "correct": false,
+          "top3_correct": true
         },
         {
           "target": "dow",
-          "pred": "words",
-          "correct": false
+          "pred": "cake",
+          "top3": [
+            "cake",
+            "care"
+          ],
+          "correct": false,
+          "top3_correct": false
         },
         {
           "target": "never",
           "pred": "never",
-          "correct": true
+          "top3": [
+            "never",
+            "every",
+            "seven"
+          ],
+          "correct": true,
+          "top3_correct": true
         },
         {
           "target": "crime",
-          "pred": "when",
-          "correct": false
+          "pred": "what",
+          "top3": [
+            "what",
+            "that",
+            "with"
+          ],
+          "correct": false,
+          "top3_correct": false
         },
         {
           "target": "know",
-          "pred": "known",
-          "correct": false
+          "pred": "verbs",
+          "top3": [
+            "verbs",
+            "never",
+            "seven"
+          ],
+          "correct": false,
+          "top3_correct": false
+        }
+      ]
+    },
+    "LEVEL3": {
+      "word_acc": 0.2,
+      "top3_word_acc": 0.2,
+      "char_acc": 0.4286,
+      "records": [
+        {
+          "target": "protect",
+          "pred": "prepare",
+          "top3": [
+            "prepare",
+            "writing",
+            "picture"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "driving",
+          "pred": "writing",
+          "top3": [
+            "writing",
+            "wonderful"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "detector",
+          "pred": "believe",
+          "top3": [
+            "believe",
+            "beginning",
+            "before"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "return",
+          "pred": "return",
+          "top3": [
+            "return",
+            "writing",
+            "running"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "poorest",
+          "pred": "before",
+          "top3": [
+            "before",
+            "between",
+            "beware"
+          ],
+          "correct": false,
+          "top3_correct": false
         }
       ]
     }

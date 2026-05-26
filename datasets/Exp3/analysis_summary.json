@@ -1,0 +1,35 @@
+{
+  "per_user": [
+    {
+      "user": "exp3_U02",
+      "L1_letter_acc": 0.8571,
+      "L1_letter_n": 14,
+      "L1_digit_acc": 1.0,
+      "L1_digit_n": 6,
+      "LEVEL2_wa": 0.4,
+      "LEVEL2_cer": 0.5156,
+      "LEVEL2_n": 15,
+      "LEVEL3_wa": 0.2,
+      "LEVEL3_cer": 0.5429,
+      "LEVEL3_n": 5
+    }
+  ],
+  "overall": {
+    "LEVEL1": {
+      "letter_acc": 0.8571,
+      "letter_n": 14,
+      "digit_acc": 1.0,
+      "digit_n": 6
+    },
+    "LEVEL2": {
+      "wa": 0.4,
+      "cer": 0.5156,
+      "n": 15
+    },
+    "LEVEL3": {
+      "wa": 0.2,
+      "cer": 0.5429,
+      "n": 5
+    }
+  }
+}
