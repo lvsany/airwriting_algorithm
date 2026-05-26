@@ -1,0 +1,424 @@
+{
+  "model": "gpt-5.2",
+  "summary": {
+    "LEVEL1": {
+      "word_acc": 1.0,
+      "top3_word_acc": 1.0,
+      "char_acc": 1.0,
+      "records": [
+        {
+          "target": "R",
+          "pred": "R",
+          "top3": [
+            "R"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "R",
+          "pred": "R",
+          "top3": [
+            "R"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "3",
+          "pred": "3",
+          "top3": [
+            "3"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "7",
+          "pred": "7",
+          "top3": [
+            "7"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "W",
+          "pred": "W",
+          "top3": [
+            "W"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "B",
+          "pred": "B",
+          "top3": [
+            "B"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "T",
+          "pred": "T",
+          "top3": [
+            "T"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "M",
+          "pred": "M",
+          "top3": [
+            "M"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "3",
+          "pred": "3",
+          "top3": [
+            "3"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "P",
+          "pred": "P",
+          "top3": [
+            "P"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "B",
+          "pred": "B",
+          "top3": [
+            "B"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "A",
+          "pred": "A",
+          "top3": [
+            "A"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "A",
+          "pred": "A",
+          "top3": [
+            "A"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "G",
+          "pred": "G",
+          "top3": [
+            "G"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "7",
+          "pred": "7",
+          "top3": [
+            "7"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "W",
+          "pred": "W",
+          "top3": [
+            "W"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "T",
+          "pred": "T",
+          "top3": [
+            "T"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "G",
+          "pred": "G",
+          "top3": [
+            "G"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "M",
+          "pred": "M",
+          "top3": [
+            "M"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "P",
+          "pred": "P",
+          "top3": [
+            "P"
+          ],
+          "correct": true,
+          "top3_correct": true
+        }
+      ]
+    },
+    "LEVEL2": {
+      "word_acc": 0.5333,
+      "top3_word_acc": 0.6667,
+      "char_acc": 0.8507,
+      "records": [
+        {
+          "target": "windy",
+          "pred": "made",
+          "top3": [
+            "made",
+            "mind",
+            "mail"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "fudge",
+          "pred": "fudge",
+          "top3": [
+            "fudge",
+            "rid"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "take",
+          "pred": "take",
+          "top3": [
+            "take",
+            "tape",
+            "cake"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "folds",
+          "pred": "folds",
+          "top3": [
+            "folds",
+            "hold",
+            "hole"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "stuck",
+          "pred": "stuck",
+          "top3": [
+            "stuck",
+            "still",
+            "stock"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "line",
+          "pred": "love",
+          "top3": [
+            "love",
+            "like",
+            "line"
+          ],
+          "correct": false,
+          "top3_correct": true
+        },
+        {
+          "target": "those",
+          "pred": "these",
+          "top3": [
+            "these",
+            "those",
+            "there"
+          ],
+          "correct": false,
+          "top3_correct": true
+        },
+        {
+          "target": "levee",
+          "pred": "here",
+          "top3": [
+            "here",
+            "there",
+            "were"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "spill",
+          "pred": "spill",
+          "top3": [
+            "spill",
+            "small",
+            "shall"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "care",
+          "pred": "care",
+          "top3": [
+            "care",
+            "cake",
+            "cape"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "years",
+          "pred": "year",
+          "top3": [
+            "year",
+            "yet"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "does",
+          "pred": "looks",
+          "top3": [
+            "looks",
+            "look",
+            "loose"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "mask",
+          "pred": "much",
+          "top3": [
+            "much",
+            "music",
+            "must"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "the",
+          "pred": "the",
+          "top3": [
+            "the",
+            "these",
+            "there"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "stay",
+          "pred": "stay",
+          "top3": [
+            "stay",
+            "step",
+            "stop"
+          ],
+          "correct": true,
+          "top3_correct": true
+        }
+      ]
+    },
+    "LEVEL3": {
+      "word_acc": 0.2,
+      "top3_word_acc": 0.2,
+      "char_acc": 0.5814,
+      "records": [
+        {
+          "target": "chemical",
+          "pred": "changed",
+          "top3": [
+            "changed",
+            "handled",
+            "chamber"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "coronation",
+          "pred": "construction",
+          "top3": [
+            "construction",
+            "concentrate",
+            "correction"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "superman",
+          "pred": "superman",
+          "top3": [
+            "superman",
+            "sunday",
+            "succeed"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "interesting",
+          "pred": "maternity",
+          "top3": [
+            "maternity",
+            "machinery",
+            "majesty"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "profit",
+          "pred": "problem",
+          "top3": [
+            "problem",
+            "problems",
+            "proposal"
+          ],
+          "correct": false,
+          "top3_correct": false
+        }
+      ]
+    }
+  }
+}

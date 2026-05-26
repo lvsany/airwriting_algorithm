@@ -12,7 +12,7 @@ from openai import OpenAI
 # ── API 配置 ──────────────────────────────────────────────────────────────────
 _API_KEY  = "sk-6vAtYqBsNcAnnjcLTU4qZyXARJmzL5y5W6cy4a03Tx3NlYe2"
 _BASE_URL = "https://api.chatanywhere.tech/v1"
-_MODEL    = "gpt-5.4-mini"
+_MODEL    = "gpt-5.2"
 
 # ── 候选词表 ──────────────────────────────────────────────────────────────────
 _WORDS_FILE = os.path.join(os.path.dirname(__file__), "words.txt")
@@ -67,7 +67,6 @@ def render_strokes(strokes: list) -> np.ndarray:
         pts = [to_px(p['x'], p['y']) for p in stroke]
         for i in range(1, len(pts)):
             cv2.line(img, pts[i - 1], pts[i], (20, 20, 20), 3, cv2.LINE_AA)
-        cv2.circle(img, pts[0], 4, (60, 60, 220), -1, cv2.LINE_AA)  # 起笔蓝点
 
     if _ROTATE_DEG != 0.0:
         cx, cy = _CANVAS // 2, _CANVAS // 2
@@ -87,7 +86,6 @@ _PROMPT_LETTER = (
     "This image shows a handwritten single uppercase English letter (A-Z). "
     "The stroke is rendered from raw palm coordinates, so the character may appear rotated, slanted, or shaky. "
     "Focus on the topology and stroke count of the shape — ignore orientation. "
-    "The red dot is the pen-down starting point. "
     "Reply with ONLY the single uppercase letter, nothing else."
 )
 
@@ -95,18 +93,16 @@ _PROMPT_DIGIT = (
     "This image shows a handwritten single digit (0–9). "
     "The stroke is rendered from raw palm coordinates, so the digit may appear rotated, slanted, or shaky. "
     "Focus on the overall shape and loop structure — ignore orientation. "
-    "The red dot is the pen-down starting point. "
     "Reply with ONLY the single digit, nothing else."
 )
 
 _PROMPT_LEVEL2 = (
     "This image shows a short English word (fewer than 6 letters) written in the air by tracing on a palm with a fingertip. "
-    "The writing may appear cursive, slanted, or slightly distorted. "
-    "The blue dot marks the pen-down starting point; reading direction is left to right. "
+    "The writing may appear cursive, slanted, or slightly distorted. Reading direction is left to right. "
     "Candidate list — you MUST choose ONLY from these exact words, no exceptions:\n{word_list}\n\n"
     "Instructions:\n"
     "1. Estimate the number of letters from the stroke count and word length.\n"
-    "2. Identify the starting letter shape near the blue dot.\n"
+    "2. Identify the starting letter shape at the left side of the writing.\n"
     "3. Select 3 DISTINCT candidates ranked by likelihood.\n"
     "CRITICAL: Every word in your answer MUST appear verbatim in the candidate list above. "
     "Do NOT invent, modify, or use any word not in the list. "
@@ -116,12 +112,11 @@ _PROMPT_LEVEL2 = (
 
 _PROMPT_LEVEL3 = (
     "This image shows a long English word (6 or more letters) written in the air by tracing on a palm with a fingertip. "
-    "The writing may appear cursive, slanted, or slightly distorted. "
-    "The blue dot marks the pen-down starting point; reading direction is left to right. "
+    "The writing may appear cursive, slanted, or slightly distorted. Reading direction is left to right. "
     "Candidate list — you MUST choose ONLY from these exact words, no exceptions:\n{word_list}\n\n"
     "Instructions:\n"
     "1. Estimate the number of letters from the overall word length.\n"
-    "2. Identify the starting letter shape near the blue dot.\n"
+    "2. Identify the starting letter shape at the left side of the writing.\n"
     "3. Select 3 DISTINCT candidates ranked by likelihood.\n"
     "CRITICAL: Every word in your answer MUST appear verbatim in the candidate list above. "
     "Do NOT invent, modify, or use any word not in the list. "

@@ -67,20 +67,27 @@ def analyze_file(path: str) -> dict[str, Any]:
         "digit_n":    digits["n"],
     }
 
-    # ── LEVEL2 / LEVEL3：WA + CER ─────────────────────────────────────────────
+    # ── LEVEL2 / LEVEL3：WA + CER + Top3-WA + Top3-CER ──────────────────────
     for lvl in ("LEVEL2", "LEVEL3"):
         lx = summary.get(lvl, {})
         records = lx.get("records", [])
         if not records:
             result[lvl] = None
             continue
-        word_ok  = sum(1 for r in records if r["correct"])
-        total_ed = sum(edit_distance(r["target"], r["pred"]) for r in records)
+        word_ok   = sum(1 for r in records if r["correct"])
+        top3_ok   = sum(1 for r in records if r.get("top3_correct", r["correct"]))
+        total_ed  = sum(edit_distance(r["target"], r["pred"]) for r in records)
+        total_ed3 = sum(
+            min(edit_distance(r["target"], c) for c in r.get("top3", [r["pred"]]))
+            for r in records
+        )
         total_ref = sum(len(r["target"]) for r in records)
         result[lvl] = {
-            "wa":  word_ok / len(records),
-            "cer": total_ed / total_ref if total_ref else 0.0,
-            "n":   len(records),
+            "wa":       word_ok  / len(records),
+            "top3_wa":  top3_ok  / len(records),
+            "cer":      total_ed  / total_ref if total_ref else 0.0,
+            "top3_cer": total_ed3 / total_ref if total_ref else 0.0,
+            "n":        len(records),
         }
 
     return result
@@ -139,10 +146,11 @@ def fmt_pct(v) -> str:
 
 
 def print_user_table(file_results: list):
-    print("\n" + "=" * 80)
+    print("\n" + "=" * 100)
     print(f"{'User':<20} {'L1-Letter':>10} {'L1-Digit':>10} "
-          f"{'L2-WA':>8} {'L2-CER':>8} {'L3-WA':>8} {'L3-CER':>8}")
-    print("-" * 80)
+          f"{'L2-WA':>7} {'L2-T3WA':>8} {'L2-CER':>7} {'L2-T3CER':>9} "
+          f"{'L3-WA':>7} {'L3-T3WA':>8} {'L3-CER':>7} {'L3-T3CER':>9}")
+    print("-" * 100)
     for res in file_results:
         user = os.path.basename(res["path"]).replace("_results.json", "")
         l1   = res["LEVEL1"]
@@ -152,10 +160,14 @@ def print_user_table(file_results: list):
             f"{user:<20} "
             f"{fmt_pct(l1['letter_acc']):>10} "
             f"{fmt_pct(l1['digit_acc']):>10} "
-            f"{fmt_pct(l2['wa'] if l2 else None):>8} "
-            f"{fmt_pct(l2['cer'] if l2 else None):>8} "
-            f"{fmt_pct(l3['wa'] if l3 else None):>8} "
-            f"{fmt_pct(l3['cer'] if l3 else None):>8} "
+            f"{fmt_pct(l2['wa']       if l2 else None):>7} "
+            f"{fmt_pct(l2['top3_wa']  if l2 else None):>8} "
+            f"{fmt_pct(l2['cer']      if l2 else None):>7} "
+            f"{fmt_pct(l2['top3_cer'] if l2 else None):>9} "
+            f"{fmt_pct(l3['wa']       if l3 else None):>7} "
+            f"{fmt_pct(l3['top3_wa']  if l3 else None):>8} "
+            f"{fmt_pct(l3['cer']      if l3 else None):>7} "
+            f"{fmt_pct(l3['top3_cer'] if l3 else None):>9} "
         )
 
 
@@ -163,8 +175,8 @@ def print_overall(file_results: list):
     # Recompute CER properly from raw records
     totals = {
         "LEVEL1": {"letter_ok": 0, "letter_n": 0, "digit_ok": 0, "digit_n": 0},
-        "LEVEL2": {"word_ok": 0, "ed": 0, "ref": 0, "n": 0},
-        "LEVEL3": {"word_ok": 0, "ed": 0, "ref": 0, "n": 0},
+        "LEVEL2": {"word_ok": 0, "top3_ok": 0, "ed": 0, "ed3": 0, "ref": 0, "n": 0},
+        "LEVEL3": {"word_ok": 0, "top3_ok": 0, "ed": 0, "ed3": 0, "ref": 0, "n": 0},
     }
 
     for res in file_results:
@@ -184,10 +196,12 @@ def print_overall(file_results: list):
 
         for lvl in ("LEVEL2", "LEVEL3"):
             for r in summary.get(lvl, {}).get("records", []):
-                totals[lvl]["n"]      += 1
+                totals[lvl]["n"]       += 1
                 totals[lvl]["word_ok"] += int(r["correct"])
-                totals[lvl]["ed"]     += edit_distance(r["target"], r["pred"])
-                totals[lvl]["ref"]    += len(r["target"])
+                totals[lvl]["top3_ok"] += int(r.get("top3_correct", r["correct"]))
+                totals[lvl]["ed"]      += edit_distance(r["target"], r["pred"])
+                totals[lvl]["ed3"]     += min(edit_distance(r["target"], c) for c in r.get("top3", [r["pred"]]))
+                totals[lvl]["ref"]     += len(r["target"])
 
     print("\n" + "=" * 80)
     print("OVERALL RESULTS")
@@ -205,11 +219,15 @@ def print_overall(file_results: list):
         if t["n"] == 0:
             print(f"\n{lvl}  no data")
             continue
-        wa  = t["word_ok"] / t["n"]
-        cer_val = t["ed"] / t["ref"] if t["ref"] else 0.0
+        wa      = t["word_ok"]  / t["n"]
+        top3_wa = t["top3_ok"]  / t["n"]
+        cer_val  = t["ed"]  / t["ref"] if t["ref"] else 0.0
+        cer3_val = t["ed3"] / t["ref"] if t["ref"] else 0.0
         print(f"\n{lvl}  (n={t['n']})")
-        print(f"  Word Accuracy (WA)        : {fmt_pct(wa)}")
-        print(f"  Character Error Rate (CER): {fmt_pct(cer_val)}")
+        print(f"  Word Accuracy Top-1 (WA)       : {fmt_pct(wa)}")
+        print(f"  Word Accuracy Top-3 (T3WA)     : {fmt_pct(top3_wa)}")
+        print(f"  Char Error Rate Top-1 (CER)    : {fmt_pct(cer_val)}")
+        print(f"  Char Error Rate Best-3 (T3CER) : {fmt_pct(cer3_val)}")
 
     print()
 
@@ -242,8 +260,8 @@ def save_results(out_dir: str, paths: list, file_results: list):
     # ── 重新从原始记录精确计算汇总 ────────────────────────────────────────────
     totals = {
         "LEVEL1": {"letter_ok": 0, "letter_n": 0, "digit_ok": 0, "digit_n": 0},
-        "LEVEL2": {"word_ok": 0, "ed": 0, "ref": 0, "n": 0},
-        "LEVEL3": {"word_ok": 0, "ed": 0, "ref": 0, "n": 0},
+        "LEVEL2": {"word_ok": 0, "top3_ok": 0, "ed": 0, "ed3": 0, "ref": 0, "n": 0},
+        "LEVEL3": {"word_ok": 0, "top3_ok": 0, "ed": 0, "ed3": 0, "ref": 0, "n": 0},
     }
     user_rows = []
 
@@ -253,7 +271,7 @@ def save_results(out_dir: str, paths: list, file_results: list):
         summary = data.get("summary", {})
         user = os.path.basename(path).replace("_results.json", "")
 
-        row = {"user": user}
+        row = {"用户": user}
 
         for r in summary.get("LEVEL1", {}).get("records", []):
             t = r["target"].strip().upper()
@@ -265,35 +283,43 @@ def save_results(out_dir: str, paths: list, file_results: list):
                 totals["LEVEL1"]["letter_ok"] += int(r["correct"])
 
         l1 = res["LEVEL1"]
-        row["L1_letter_acc"] = round(l1["letter_acc"], 4) if l1["letter_acc"] is not None else None
-        row["L1_letter_n"]   = l1["letter_n"]
-        row["L1_digit_acc"]  = round(l1["digit_acc"], 4)  if l1["digit_acc"]  is not None else None
-        row["L1_digit_n"]    = l1["digit_n"]
+        row["L1字母准确率"] = round(l1["letter_acc"], 4) if l1["letter_acc"] is not None else None
+        row["L1字母数"]     = l1["letter_n"]
+        row["L1数字准确率"] = round(l1["digit_acc"], 4)  if l1["digit_acc"]  is not None else None
+        row["L1数字数"]     = l1["digit_n"]
 
+        lv_cn = {"LEVEL2": "L2", "LEVEL3": "L3"}
         for lvl in ("LEVEL2", "LEVEL3"):
-            for r in summary.get(lvl, {}).get("records", []):
+            px = lv_cn[lvl]
+            recs = summary.get(lvl, {}).get("records", [])
+            for r in recs:
                 totals[lvl]["n"]       += 1
                 totals[lvl]["word_ok"] += int(r["correct"])
+                totals[lvl]["top3_ok"] += int(r.get("top3_correct", r["correct"]))
                 totals[lvl]["ed"]      += edit_distance(r["target"], r["pred"])
+                totals[lvl]["ed3"]     += min(edit_distance(r["target"], c) for c in r.get("top3", [r["pred"]]))
                 totals[lvl]["ref"]     += len(r["target"])
             lx = res[lvl]
             if lx:
-                # recompute CER from raw
-                ed  = sum(edit_distance(r["target"], r["pred"]) for r in summary.get(lvl, {}).get("records", []))
-                ref = sum(len(r["target"])                       for r in summary.get(lvl, {}).get("records", []))
-                row[f"{lvl}_wa"]  = round(lx["wa"], 4)
-                row[f"{lvl}_cer"] = round(ed / ref, 4) if ref else None
-                row[f"{lvl}_n"]   = lx["n"]
+                ed  = sum(edit_distance(r["target"], r["pred"]) for r in recs)
+                ed3 = sum(min(edit_distance(r["target"], c) for c in r.get("top3", [r["pred"]])) for r in recs)
+                ref = sum(len(r["target"]) for r in recs)
+                row[f"{px}词准确率"]      = round(lx["wa"], 4)
+                row[f"{px}Top3词准确率"]  = round(lx["top3_wa"], 4)
+                row[f"{px}字符错误率"]    = round(ed  / ref, 4) if ref else None
+                row[f"{px}Top3字符错误率"] = round(ed3 / ref, 4) if ref else None
+                row[f"{px}样本数"]        = lx["n"]
             else:
-                row[f"{lvl}_wa"] = row[f"{lvl}_cer"] = row[f"{lvl}_n"] = None
+                row[f"{px}词准确率"] = row[f"{px}Top3词准确率"] = \
+                row[f"{px}字符错误率"] = row[f"{px}Top3字符错误率"] = row[f"{px}样本数"] = None
         user_rows.append(row)
 
     t1 = totals["LEVEL1"]
     level1_overall: Dict[str, Optional[Union[float, int]]] = {
-        "letter_acc": round(t1["letter_ok"] / t1["letter_n"], 4) if t1["letter_n"] else None,
-        "letter_n":   t1["letter_n"],
-        "digit_acc":  round(t1["digit_ok"]  / t1["digit_n"],  4) if t1["digit_n"]  else None,
-        "digit_n":    t1["digit_n"],
+        "字母准确率": round(t1["letter_ok"] / t1["letter_n"], 4) if t1["letter_n"] else None,
+        "字母数":     t1["letter_n"],
+        "数字准确率": round(t1["digit_ok"]  / t1["digit_n"],  4) if t1["digit_n"]  else None,
+        "数字数":     t1["digit_n"],
     }
     overall: Dict[str, Optional[Dict[str, Optional[Union[float, int]]]]] = {
         "LEVEL1": level1_overall
@@ -301,44 +327,48 @@ def save_results(out_dir: str, paths: list, file_results: list):
     for lvl in ("LEVEL2", "LEVEL3"):
         t = totals[lvl]
         overall[lvl] = {
-            "wa":  round(t["word_ok"] / t["n"], 4) if t["n"] else None,
-            "cer": round(t["ed"] / t["ref"], 4)    if t["ref"] else None,
-            "n":   t["n"],
+            "词准确率":       round(t["word_ok"]  / t["n"],   4) if t["n"]   else None,
+            "Top3词准确率":   round(t["top3_ok"]  / t["n"],   4) if t["n"]   else None,
+            "字符错误率":     round(t["ed"]  / t["ref"], 4)       if t["ref"] else None,
+            "Top3字符错误率": round(t["ed3"] / t["ref"], 4)       if t["ref"] else None,
+            "样本数":         t["n"],
         } if t["n"] else None
 
     # ── 保存 JSON ──────────────────────────────────────────────────────────────
     json_path = os.path.join(out_dir, "analysis_summary.json")
     with open(json_path, "w", encoding="utf-8") as f:
-        json.dump({"per_user": user_rows, "overall": overall}, f, ensure_ascii=False, indent=2)
+        json.dump({"各用户": user_rows, "总体": overall}, f, ensure_ascii=False, indent=2)
     print(f"JSON 已保存 → {json_path}")
 
     # ── 保存 CSV ───────────────────────────────────────────────────────────────
     import csv
     csv_path = os.path.join(out_dir, "analysis_summary.csv")
     fieldnames = [
-        "user",
-        "L1_letter_acc", "L1_letter_n",
-        "L1_digit_acc",  "L1_digit_n",
-        "LEVEL2_wa", "LEVEL2_cer", "LEVEL2_n",
-        "LEVEL3_wa", "LEVEL3_cer", "LEVEL3_n",
+        "用户",
+        "L1字母准确率", "L1字母数",
+        "L1数字准确率", "L1数字数",
+        "L2词准确率", "L2Top3词准确率", "L2字符错误率", "L2Top3字符错误率", "L2样本数",
+        "L3词准确率", "L3Top3词准确率", "L3字符错误率", "L3Top3字符错误率", "L3样本数",
     ]
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(user_rows)
-        # overall row
         overall_row = {
-            "user": "OVERALL",
-            "L1_letter_acc": level1_overall["letter_acc"],
-            "L1_letter_n":   level1_overall["letter_n"],
-            "L1_digit_acc":  level1_overall["digit_acc"],
-            "L1_digit_n":    level1_overall["digit_n"],
+            "用户":     "总体",
+            "L1字母准确率": level1_overall["字母准确率"],
+            "L1字母数":     level1_overall["字母数"],
+            "L1数字准确率": level1_overall["数字准确率"],
+            "L1数字数":     level1_overall["数字数"],
         }
         for lvl in ("LEVEL2", "LEVEL3"):
+            px = lv_cn[lvl]
             ov = overall.get(lvl)
-            overall_row[f"{lvl}_wa"]  = ov["wa"]  if ov else None
-            overall_row[f"{lvl}_cer"] = ov["cer"] if ov else None
-            overall_row[f"{lvl}_n"]   = ov["n"]   if ov else None
+            overall_row[f"{px}词准确率"]       = ov["词准确率"]       if ov else None
+            overall_row[f"{px}Top3词准确率"]   = ov["Top3词准确率"]   if ov else None
+            overall_row[f"{px}字符错误率"]     = ov["字符错误率"]     if ov else None
+            overall_row[f"{px}Top3字符错误率"] = ov["Top3字符错误率"] if ov else None
+            overall_row[f"{px}样本数"]         = ov["样本数"]         if ov else None
         writer.writerow(overall_row)
     print(f"CSV 已保存 → {csv_path}")
 
