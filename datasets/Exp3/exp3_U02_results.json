@@ -1,0 +1,192 @@
+{
+  "model": "gpt-5.4-mini",
+  "summary": {
+    "LEVEL1": {
+      "word_acc": 0.9,
+      "char_acc": 0.9,
+      "records": [
+        {
+          "target": "0",
+          "pred": "0",
+          "correct": true
+        },
+        {
+          "target": "8",
+          "pred": "8",
+          "correct": true
+        },
+        {
+          "target": "8",
+          "pred": "8",
+          "correct": true
+        },
+        {
+          "target": "Z",
+          "pred": "Z",
+          "correct": true
+        },
+        {
+          "target": "S",
+          "pred": "S",
+          "correct": true
+        },
+        {
+          "target": "I",
+          "pred": "I",
+          "correct": true
+        },
+        {
+          "target": "P",
+          "pred": "P",
+          "correct": true
+        },
+        {
+          "target": "0",
+          "pred": "0",
+          "correct": true
+        },
+        {
+          "target": "P",
+          "pred": "P",
+          "correct": true
+        },
+        {
+          "target": "G",
+          "pred": "G",
+          "correct": true
+        },
+        {
+          "target": "9",
+          "pred": "9",
+          "correct": true
+        },
+        {
+          "target": "Z",
+          "pred": "Z",
+          "correct": true
+        },
+        {
+          "target": "G",
+          "pred": "R",
+          "correct": false
+        },
+        {
+          "target": "J",
+          "pred": "J",
+          "correct": true
+        },
+        {
+          "target": "S",
+          "pred": "J",
+          "correct": false
+        },
+        {
+          "target": "J",
+          "pred": "J",
+          "correct": true
+        },
+        {
+          "target": "U",
+          "pred": "U",
+          "correct": true
+        },
+        {
+          "target": "I",
+          "pred": "I",
+          "correct": true
+        },
+        {
+          "target": "9",
+          "pred": "9",
+          "correct": true
+        },
+        {
+          "target": "U",
+          "pred": "U",
+          "correct": true
+        }
+      ]
+    },
+    "LEVEL2": {
+      "word_acc": 0.4,
+      "char_acc": 0.625,
+      "records": [
+        {
+          "target": "laugh",
+          "pred": "again",
+          "correct": false
+        },
+        {
+          "target": "else",
+          "pred": "else",
+          "correct": true
+        },
+        {
+          "target": "need",
+          "pred": "need",
+          "correct": true
+        },
+        {
+          "target": "panel",
+          "pred": "panel",
+          "correct": true
+        },
+        {
+          "target": "tests",
+          "pred": "yes",
+          "correct": false
+        },
+        {
+          "target": "ate",
+          "pred": "about",
+          "correct": false
+        },
+        {
+          "target": "sum",
+          "pred": "walk",
+          "correct": false
+        },
+        {
+          "target": "many",
+          "pred": "windy",
+          "correct": false
+        },
+        {
+          "target": "bases",
+          "pred": "bases",
+          "correct": true
+        },
+        {
+          "target": "these",
+          "pred": "these",
+          "correct": true
+        },
+        {
+          "target": "lens",
+          "pred": "hens",
+          "correct": false
+        },
+        {
+          "target": "dow",
+          "pred": "words",
+          "correct": false
+        },
+        {
+          "target": "never",
+          "pred": "never",
+          "correct": true
+        },
+        {
+          "target": "crime",
+          "pred": "when",
+          "correct": false
+        },
+        {
+          "target": "know",
+          "pred": "known",
+          "correct": false
+        }
+      ]
+    }
+  }
+}

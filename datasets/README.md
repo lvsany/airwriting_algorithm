@@ -1,5 +1,11 @@
 # Air-Writing 数据集说明
 
+## 完整流程概览
+
+```
+采集 (test.py)  →  识别评估 (recognize.py)  →  汇总统计 (analyze_results.py)
+```
+
 ## 目录结构
 
 ```
@@ -8,10 +14,13 @@ datasets/
 │   └── Exp3/
 │       ├── exp3_user_01.json            # 笔画轨迹数据
 │       ├── exp3_user_01_raw.mp4         # 采集时的原始视频
-│       └── exp3_user_01_results.json    # 识别评估结果
-├── rendered_preview/                    # 渲染预览图（可选，运行时生成）
+│       ├── exp3_user_01_results.json    # 识别评估结果（recognize.py 生成）
+│       ├── analysis_summary.json        # 跨用户汇总（analyze_results.py 生成）
+│       └── analysis_summary.csv        # 同上，CSV 格式
+├── rendered_preview/                    # 渲染预览图（可选，--save-images 时生成）
 ├── test.py                              # 数据采集脚本
 ├── recognize.py                         # 识别评估脚本
+├── analyze_results.py                   # 跨用户汇总统计脚本
 └── words.txt                            # 候选词表（MacKenzie & Soukoreff phrase set）
 ```
 
@@ -174,3 +183,64 @@ datasets/datasets/Exp3/exp3_user_01_results.json
 - LEVEL2 从中筛选长度 5–6 的单词
 - LEVEL3 从中筛选长度 ≥ 7 的单词
 - 识别时将完整词表注入 prompt，引导模型做约束识别而非自由生成
+
+---
+
+## 五、跨用户汇总统计（`analyze_results.py`）
+
+### 运行方式
+
+```bash
+# 默认扫描 datasets/datasets/Exp3/ 目录
+python datasets/analyze_results.py
+
+# 指定其他目录
+python datasets/analyze_results.py --dir datasets/datasets/Exp4
+```
+
+每次新增用户数据并完成 `recognize.py` 评估后，重跑此脚本即可更新汇总。
+
+### 统计指标
+
+| 维度 | 指标 | 说明 |
+|------|------|------|
+| LEVEL1 | Letter Accuracy | 字母（A–Z）识别准确率 |
+| LEVEL1 | Digit Accuracy | 数字（0–9）识别准确率 |
+| LEVEL2/3 | Word Accuracy (WA) | 整词完全匹配率 |
+| LEVEL2/3 | Character Error Rate (CER) | 字符错误率，`CER = EditDist(pred, target) / len(target)` |
+
+### 输出文件
+
+脚本运行后在同一目录下生成两个文件：
+
+**`analysis_summary.json`**
+
+```json
+{
+  "per_user": [
+    {
+      "user": "exp3_user_01",
+      "L1_letter_acc": 0.625, "L1_letter_n": 16,
+      "L1_digit_acc":  0.75,  "L1_digit_n":  4,
+      "LEVEL2_wa": 0.31, "LEVEL2_cer": 0.548, "LEVEL2_n": 29,
+      "LEVEL3_wa": 0.0,  "LEVEL3_cer": 0.757, "LEVEL3_n": 5
+    },
+    ...
+  ],
+  "overall": {
+    "LEVEL1": { "letter_acc": 0.594, "letter_n": 32, "digit_acc": 0.625, "digit_n": 8 },
+    "LEVEL2": { "wa": 0.25, "cer": 0.588, "n": 44 },
+    "LEVEL3": { "wa": 0.10, "cer": 0.728, "n": 10 }
+  }
+}
+```
+
+**`analysis_summary.csv`**
+
+逐行为每位用户，最后一行为 `OVERALL`，列结构如下：
+
+```
+user | L1_letter_acc | L1_letter_n | L1_digit_acc | L1_digit_n | LEVEL2_wa | LEVEL2_cer | LEVEL2_n | LEVEL3_wa | LEVEL3_cer | LEVEL3_n
+```
+
+可直接导入 Excel、pandas 或 R 用于绘图与统计检验。

@@ -22,7 +22,7 @@ from typing import Optional
 # ── 默认超参数 ────────────────────────────────────────────────────────────────
 _STABILITY_WIN = 10      # 稳定性检测窗口（帧）
 _STABILITY_THR = 5.0     # dist2d_lm0 滑动标准差阈值（像素），低于此值视为稳定
-_COLLECT_N     = 150     # hover 采集帧数（约 3 秒 @60fps）
+_COLLECT_N     = 60     # hover 采集帧数（约 3 秒 @60fps）
 _PERCENTILE    = 99.0    # 自适应阈值 τ 所用百分位  # FIX: 缺陷D - 由95改为99，使hover帧的5%误判降至1%
 _MAD_SCALE     = 1.4826  # MAD → 高斯等效 σ 的一致性修正因子
 _SIGMA_MIN     = 1e-6    # σ 下界，触发后置 1.0（防除零）

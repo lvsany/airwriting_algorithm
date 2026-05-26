@@ -25,6 +25,23 @@ C = {
     'writing': (80, 230, 120), 'hover': (200, 180, 80), 'warn': (60, 60, 240)
 }
 
+# EMA smoothing factor for u/v trajectory (0 < α ≤ 1; smaller → smoother but more lag)
+_SMOOTH_ALPHA = 0.4
+
+# 裁剪笔画末尾静止点的像素距离阈值（单位：px）
+_TAIL_EPS_PX = 4
+
+def _trim_tail(stroke: list) -> list:
+    """去除笔画末尾因 still-hold 积累的近静止点。"""
+    while len(stroke) >= 2:
+        dx = stroke[-1]['x'] - stroke[-2]['x']
+        dy = stroke[-1]['y'] - stroke[-2]['y']
+        if dx * dx + dy * dy <= _TAIL_EPS_PX * _TAIL_EPS_PX:
+            stroke = stroke[:-1]
+        else:
+            break
+    return stroke
+
 class Exp3Collector:
     def __init__(self, user_id, out_dir="datasets/Exp3", start_level=None):
         self.user_id = user_id
@@ -66,8 +83,8 @@ class Exp3Collector:
             print(f"[ERR] {words_file} not found. Using fallback words.")
             words = ["hello", "world", "test", "testing", "longest"]
             
-        words_l2 = [w for w in words if 5 <= len(w) <= 6]
-        words_l3 = [w for w in words if len(w) >= 7]
+        words_l2 = [w for w in words if 3 <= len(w) <= 5]
+        words_l3 = [w for w in words if len(w) >= 6]
         
         # Fallbacks just in case the lists are too small
         if not words_l2: words_l2 = ["hello", "world"]
@@ -239,7 +256,7 @@ class Exp3Collector:
         # Handle still-hold (0.5s pause to stop writing/clear/advance)
         if self.detector.consume_still_hold_event():
             if self.current_stroke:
-                self.current_strokes.append(self.current_stroke)
+                self.current_strokes.append(_trim_tail(self.current_stroke))
                 self.current_stroke = []
                 
             if self.state == "PRACTICE":
@@ -250,18 +267,25 @@ class Exp3Collector:
                     print(f"[{self.state}] Still-hold triggered. Auto-advancing.")
                     self.next_trial()
                 
-        # Record trajectories
+        # Record trajectories (u/v smoothed with EMA to reduce hand tremor)
         if is_writing and pos_palm is not None:
+            raw_u, raw_v = float(pos_palm[0]), float(pos_palm[1])
+            if self.current_stroke:
+                prev = self.current_stroke[-1]
+                su = _SMOOTH_ALPHA * raw_u + (1 - _SMOOTH_ALPHA) * prev['u']
+                sv = _SMOOTH_ALPHA * raw_v + (1 - _SMOOTH_ALPHA) * prev['v']
+            else:
+                su, sv = raw_u, raw_v
             self.current_stroke.append({
                 "x": pos[0], "y": pos[1],
-                "u": float(pos_palm[0]), "v": float(pos_palm[1]),
+                "u": su, "v": sv,
                 "t": time.time(),
                 "f": frame_id
             })
             
         if not is_writing and self.prev_writing:
             if self.current_stroke:
-                self.current_strokes.append(self.current_stroke)
+                self.current_strokes.append(_trim_tail(self.current_stroke))
                 self.current_stroke = []
                 
         self.prev_writing = is_writing
@@ -296,7 +320,7 @@ def main():
     cap.set(cv2.CAP_PROP_FPS, 60)
     
     # Video Recording Setup
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    fourcc = cv2.VideoWriter.fourcc(*'mp4v')
     rec_fps = min(cap.get(cv2.CAP_PROP_FPS), 30)
     if rec_fps <= 0: rec_fps = 30
     vout_raw = cv2.VideoWriter(collector.out_video, fourcc, rec_fps, (1280, 720))
@@ -312,20 +336,39 @@ def main():
     print("  Q     - Quit")
     
     frame_id = 0
+    _fps_t = time.time()
+    _fps_count = 0
+    _fps_display = 0.0
+
     while True:
         ret, frame = cap.read()
         if not ret: break
-        
+
         frame_raw = frame.copy()
         frame_id += 1
-        
+
+        # FPS measurement
+        _fps_count += 1
+        _now = time.time()
+        if _now - _fps_t >= 0.5:
+            _fps_display = _fps_count / (_now - _fps_t)
+            _fps_count = 0
+            _fps_t = _now
+
         is_writing, pos = collector.process_frame(frame, frame_id)
-        
+
         # Write raw frame to video
         vout_raw.write(frame_raw)
-        
+
         # Draw UI texts
         draw_hud(frame, collector.get_ui_text())
+
+        # FPS overlay (top-right corner)
+        fps_text = f"FPS: {_fps_display:.1f}"
+        (tw, th), _ = cv2.getTextSize(fps_text, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 1)
+        h, w = frame.shape[:2]
+        cv2.putText(frame, fps_text, (w - tw - 20, th + 15),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, C['accent'], 1, cv2.LINE_AA)
         
         # Visual feedback for writing cursor
         if pos != (0, 0):

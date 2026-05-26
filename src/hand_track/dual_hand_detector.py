@@ -26,12 +26,9 @@ config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'config.y
 with open(config_path, 'r', encoding='utf-8') as file:
     CONFIG = yaml.safe_load(file)
 
-_STILL_END_SEC = 0.6
+_STILL_END_SEC = 1
 _STILL_END_PX  = 20.0
-_STILL_END_FRAMES = max(
-    1,
-    int(round(CONFIG.get('video', {}).get('fps', 60) * _STILL_END_SEC))
-)
+_STILL_END_FRAMES = int(round(CONFIG.get('video', {}).get('fps', 60) * _STILL_END_SEC))
 
 
 class HandRole(Enum):

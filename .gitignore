@@ -4,6 +4,9 @@
 # Results / output folders
 results/
 
+rendered_imgs/
+
+
 data.zip
 
 # Cache, virtualenv, python artifacts
