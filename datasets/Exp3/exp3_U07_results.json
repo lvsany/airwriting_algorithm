@@ -1,0 +1,421 @@
+{
+  "model": "/home/shared_models/workspace/qwen/Qwen3-VL-8B-Instruct",
+  "summary": {
+    "LEVEL1": {
+      "word_acc": 1.0,
+      "top3_word_acc": 1.0,
+      "char_acc": 1.0,
+      "records": [
+        {
+          "target": "B",
+          "pred": "B",
+          "top3": [
+            "B"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "1",
+          "pred": "1",
+          "top3": [
+            "1"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "B",
+          "pred": "B",
+          "top3": [
+            "B"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "6",
+          "pred": "6",
+          "top3": [
+            "6"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "Y",
+          "pred": "Y",
+          "top3": [
+            "Y"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "C",
+          "pred": "C",
+          "top3": [
+            "C"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "6",
+          "pred": "6",
+          "top3": [
+            "6"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "G",
+          "pred": "G",
+          "top3": [
+            "G"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "G",
+          "pred": "G",
+          "top3": [
+            "G"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "M",
+          "pred": "M",
+          "top3": [
+            "M"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "1",
+          "pred": "1",
+          "top3": [
+            "1"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "U",
+          "pred": "U",
+          "top3": [
+            "U"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "C",
+          "pred": "C",
+          "top3": [
+            "C"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "M",
+          "pred": "M",
+          "top3": [
+            "M"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "Y",
+          "pred": "Y",
+          "top3": [
+            "Y"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "E",
+          "pred": "E",
+          "top3": [
+            "E"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "E",
+          "pred": "E",
+          "top3": [
+            "E"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "X",
+          "pred": "X",
+          "top3": [
+            "X"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "X",
+          "pred": "X",
+          "top3": [
+            "X"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "U",
+          "pred": "U",
+          "top3": [
+            "U"
+          ],
+          "correct": true,
+          "top3_correct": true
+        }
+      ]
+    },
+    "LEVEL2": {
+      "word_acc": 0.6,
+      "top3_word_acc": 0.6667,
+      "char_acc": 0.8571,
+      "records": [
+        {
+          "target": "stop",
+          "pred": "shop",
+          "top3": [
+            "shop",
+            "got",
+            "go"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "like",
+          "pred": "like",
+          "top3": [
+            "like",
+            "bike",
+            "cake"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "hands",
+          "pred": "hands",
+          "top3": [
+            "hands",
+            "hand",
+            "has"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "robin",
+          "pred": "robin",
+          "top3": [
+            "robin"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "sharp",
+          "pred": "sharp",
+          "top3": [
+            "sharp",
+            "bare",
+            "bears"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "time",
+          "pred": "be",
+          "top3": [
+            "be",
+            "see",
+            "me"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "gel",
+          "pred": "go",
+          "top3": [
+            "go",
+            "get",
+            "gas"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "says",
+          "pred": "be",
+          "top3": [
+            "be",
+            "see",
+            "says"
+          ],
+          "correct": false,
+          "top3_correct": true
+        },
+        {
+          "target": "bone",
+          "pred": "bone",
+          "top3": [
+            "bone",
+            "one"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "fuel",
+          "pred": "fuel",
+          "top3": [
+            "fuel",
+            "few",
+            "fine"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "user",
+          "pred": "user",
+          "top3": [
+            "user",
+            "use",
+            "us"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "bears",
+          "pred": "bears",
+          "top3": [
+            "bears",
+            "bees",
+            "beer"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "sent",
+          "pred": "zero",
+          "top3": [
+            "zero",
+            "see",
+            "be"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "keep",
+          "pred": "keep",
+          "top3": [
+            "keep",
+            "knee",
+            "bees"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "sees",
+          "pred": "be",
+          "top3": [
+            "be",
+            "see",
+            "me"
+          ],
+          "correct": false,
+          "top3_correct": false
+        }
+      ]
+    },
+    "LEVEL3": {
+      "word_acc": 0.2,
+      "top3_word_acc": 0.2,
+      "char_acc": 0.3171,
+      "records": [
+        {
+          "target": "motivational",
+          "pred": "occasional",
+          "top3": [
+            "occasional"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "chills",
+          "pred": "chills",
+          "top3": [
+            "chills",
+            "chocolate",
+            "children"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "allotted",
+          "pred": "disaster",
+          "top3": [
+            "disaster",
+            "appointment",
+            "discharged"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "favourite",
+          "pred": "accept",
+          "top3": [
+            "accept",
+            "acceptance",
+            "account"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "sister",
+          "pred": "better",
+          "top3": [
+            "better",
+            "beautiful",
+            "batman"
+          ],
+          "correct": false,
+          "top3_correct": false
+        }
+      ]
+    }
+  }
+}

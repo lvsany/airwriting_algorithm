@@ -1,0 +1,386 @@
+{
+  "model": "/home/shared_models/workspace/qwen/Qwen3-VL-8B-Instruct",
+  "summary": {
+    "LEVEL1": {
+      "word_acc": 0.8125,
+      "top3_word_acc": 0.8125,
+      "char_acc": 0.8125,
+      "records": [
+        {
+          "target": "9",
+          "pred": "8",
+          "top3": [
+            "8"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "U",
+          "pred": "U",
+          "top3": [
+            "U"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "U",
+          "pred": "U",
+          "top3": [
+            "U"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "D",
+          "pred": "B",
+          "top3": [
+            "B"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "B",
+          "pred": "B",
+          "top3": [
+            "B"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "6",
+          "pred": "6",
+          "top3": [
+            "6"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "9",
+          "pred": "9",
+          "top3": [
+            "9"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "H",
+          "pred": "H",
+          "top3": [
+            "H"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "7",
+          "pred": "7",
+          "top3": [
+            "7"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "B",
+          "pred": "B",
+          "top3": [
+            "B"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "M",
+          "pred": "M",
+          "top3": [
+            "M"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "6",
+          "pred": "6",
+          "top3": [
+            "6"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "4",
+          "pred": "4",
+          "top3": [
+            "4"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "4",
+          "pred": "4",
+          "top3": [
+            "4"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "D",
+          "pred": "Q",
+          "top3": [
+            "Q"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "M",
+          "pred": "M",
+          "top3": [
+            "M"
+          ],
+          "correct": true,
+          "top3_correct": true
+        }
+      ]
+    },
+    "LEVEL2": {
+      "word_acc": 0.4667,
+      "top3_word_acc": 0.5333,
+      "char_acc": 0.6167,
+      "records": [
+        {
+          "target": "about",
+          "pred": "about",
+          "top3": [
+            "about",
+            "am",
+            "an"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "scene",
+          "pred": "feel",
+          "top3": [
+            "feel",
+            "free",
+            "few"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "sons",
+          "pred": "know",
+          "top3": [
+            "know",
+            "go",
+            "see"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "dry",
+          "pred": "dry",
+          "top3": [
+            "dry",
+            "are",
+            "at"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "boys",
+          "pred": "bank",
+          "top3": [
+            "bank",
+            "back",
+            "at"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "one",
+          "pred": "one",
+          "top3": [
+            "one",
+            "on",
+            "at"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "war",
+          "pred": "at",
+          "top3": [
+            "at",
+            "am",
+            "an"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "quite",
+          "pred": "just",
+          "top3": [
+            "just",
+            "quit",
+            "quite"
+          ],
+          "correct": false,
+          "top3_correct": true
+        },
+        {
+          "target": "doors",
+          "pred": "doors",
+          "top3": [
+            "doors",
+            "door",
+            "does"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "mail",
+          "pred": "are",
+          "top3": [
+            "are",
+            "at",
+            "as"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "most",
+          "pred": "be",
+          "top3": [
+            "be",
+            "was",
+            "are"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "food",
+          "pred": "food",
+          "top3": [
+            "food",
+            "for",
+            "few"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "cut",
+          "pred": "cut",
+          "top3": [
+            "cut",
+            "cat",
+            "at"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "fast",
+          "pred": "few",
+          "top3": [
+            "few",
+            "be",
+            "see"
+          ],
+          "correct": false,
+          "top3_correct": false
+        },
+        {
+          "target": "down",
+          "pred": "down",
+          "top3": [
+            "down",
+            "door",
+            "dog"
+          ],
+          "correct": true,
+          "top3_correct": true
+        }
+      ]
+    },
+    "LEVEL3": {
+      "word_acc": 0.8,
+      "top3_word_acc": 0.8,
+      "char_acc": 0.8542,
+      "records": [
+        {
+          "target": "housekeeper",
+          "pred": "housekeeper",
+          "top3": [
+            "housekeeper",
+            "racketball",
+            "football"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "provided",
+          "pred": "provided",
+          "top3": [
+            "provided",
+            "protect",
+            "protesters"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "temperament",
+          "pred": "temperament",
+          "top3": [
+            "temperament"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "photographs",
+          "pred": "photographs",
+          "top3": [
+            "photographs"
+          ],
+          "correct": true,
+          "top3_correct": true
+        },
+        {
+          "target": "ordered",
+          "pred": "flavored",
+          "top3": [
+            "flavored",
+            "beautiful",
+            "amazing"
+          ],
+          "correct": false,
+          "top3_correct": false
+        }
+      ]
+    }
+  }
+}
