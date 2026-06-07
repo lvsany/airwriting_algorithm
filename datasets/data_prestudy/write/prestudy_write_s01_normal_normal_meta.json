@@ -1,0 +1,20 @@
+{
+  "source_features_csv": "experiments/data_b/exp_b1_s01_normal_normal_features.csv",
+  "source_video": "experiments/data_b/exp_b1_s01_normal_normal.mp4",
+  "output_features_csv": "experiments/data_b/exp_b1_s01_normal_normal_features_labeled.csv",
+  "total_frames": 1390,
+  "label_1_frames": 474,
+  "label_0_frames": 916,
+  "empty_frames": 0,
+  "overwrite_mode_final": true,
+  "play_speed_final": 0.5,
+  "play_speed_levels": [
+    0.25,
+    0.5,
+    1.0,
+    1.5,
+    2.0
+  ],
+  "duration_sec": 129,
+  "labeled_time": "2026-05-04 18:38:33"
+}

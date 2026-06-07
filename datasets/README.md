@@ -244,3 +244,34 @@ user | L1_letter_acc | L1_letter_n | L1_digit_acc | L1_digit_n | LEVEL2_wa | LEV
 ```
 
 可直接导入 Excel、pandas 或 R 用于绘图与统计检验。
+
+---
+
+## 六、预实验（Pre-study）
+
+```
+prestudy/
+├── collect_tap.py      受控点触采集（贴纸自动标注）
+├── collect_write.py    连续书写采集（空格键实时标注）
+├── runner.py           采集入口
+└── analyze.py          预实验分析（AUROC / DeLong，无绘图）
+
+data_prestudy/
+├── tap/                受控点触数据
+└── write/              连续书写数据
+```
+
+### 采集
+
+```bash
+python -m datasets.prestudy.runner --task tap   --subject s01 --sticker-color black
+python -m datasets.prestudy.runner --task write --subject s01 --lighting normal --speed normal
+```
+
+### 分析
+
+```bash
+python -m datasets.prestudy.analyze
+```
+
+输出：终端打印 RQ1/RQ2/RQ3 AUROC 表格 + `data_prestudy/prestudy_results.json`
