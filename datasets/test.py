@@ -45,10 +45,10 @@ for _p in (_DATASETS_DIR, _PROJECT_DIR):
 
 from contact_detectors import REGISTRY, build_detector, ContactDetectorBase
 
-_DEFAULT_CKPT = os.path.join(_DATASETS_DIR, "palmpad_checkpoints", "best.pt")
-_EXP3_ROOT    = os.path.join(_DATASETS_DIR, "Exp3")
-_OWN_DIR      = os.path.join(_EXP3_ROOT, "own_framework")   # JSON data
-_VIDEO_DIR    = os.path.join(_EXP3_ROOT, "video")           # raw recordings
+_DEFAULT_CKPT = os.path.join(_DATASETS_DIR, "models", "palmpad", "best.pt")
+_EXP3_ROOT    = os.path.join(_DATASETS_DIR, "exp3")
+_OWN_DIR      = os.path.join(_EXP3_ROOT, "own_framework")
+_VIDEO_DIR    = os.path.join(_DATASETS_DIR, "video")
 
 C = {
     'bg':      (20,  20,  25),

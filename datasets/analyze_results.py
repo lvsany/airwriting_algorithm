@@ -10,7 +10,7 @@ CER = edit_distance(pred, target) / len(target)
 
 Usage:
     python datasets/analyze_results.py
-    python datasets/analyze_results.py --dir datasets/datasets/Exp3
+    python datasets/analyze_results.py --dir datasets/exp3
 """
 
 import argparse
@@ -236,7 +236,7 @@ def print_overall(file_results: list):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dir", default="Exp3",
+    parser.add_argument("--dir", default="exp3",
                         help="Directory containing *_results.json files")
     args = parser.parse_args()
 

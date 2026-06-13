@@ -5,10 +5,10 @@ Pre-study 分析脚本
 
 用法:
   python -m datasets.prestudy.analyze
-  python -m datasets.prestudy.analyze --tap-dir data_prestudy/tap --write-dir data_prestudy/write
+  python -m datasets.prestudy.analyze --tap-dir datasets/prestudy/data/tap --write-dir datasets/prestudy/data/write
 
 输出:
-  终端打印表格 + datasets/data_prestudy/prestudy_results.json
+  终端打印表格 + datasets/prestudy/data/prestudy_results.json
 """
 
 import argparse
@@ -371,11 +371,11 @@ def run_analysis(tap_dir: str, write_dir: str, out_path: str):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--tap-dir",   default=os.path.join(
-        os.path.dirname(__file__), "..", "data_prestudy", "tap"))
+        os.path.dirname(__file__), "data", "tap"))
     parser.add_argument("--write-dir", default=os.path.join(
-        os.path.dirname(__file__), "..", "data_prestudy", "write"))
+        os.path.dirname(__file__), "data", "write"))
     parser.add_argument("--out", default=os.path.join(
-        os.path.dirname(__file__), "..", "data_prestudy", "prestudy_results.json"))
+        os.path.dirname(__file__), "data", "prestudy_results.json"))
     args = parser.parse_args()
 
     run_analysis(

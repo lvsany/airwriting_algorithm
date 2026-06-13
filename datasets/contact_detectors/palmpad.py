@@ -34,7 +34,7 @@ from src.utils.geometry_utils import get_landmark_3d
 from .base import ContactDetectorBase
 
 # hand_landmarker.task — shared with exp3_eval_palmpad.py
-_DEFAULT_TASK_PATH = os.path.join(_DATASETS, "hand_landmarker.task")
+_DEFAULT_TASK_PATH = os.path.join(_DATASETS, "models", "hand_landmarker.task")
 _TASK_URL = (
     "https://storage.googleapis.com/mediapipe-models/"
     "hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"

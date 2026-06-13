@@ -5,7 +5,7 @@ Pre-study · Task A：受控点触场景采集
 特征提取：通过 DualHandDetector.last_feat（HandFeatureExtractor）与 src 完全一致。
 flow_mag 额外从指尖 ROI 单独计算（HandFeatureExtractor 中无此特征）。
 
-输出（datasets/data_prestudy/tap/）：
+输出（datasets/prestudy/data/tap/）：
   prestudy_tap_{subject}.csv          — 每帧特征 + contact_label
   prestudy_tap_{subject}_raw.mp4      — 原始视频（无任何标注）
   prestudy_tap_{subject}_ui.mp4       — UI 视频（含关键点/标注叠加）
@@ -27,7 +27,7 @@ from src.hand_track.dual_hand_detector import DualHandDetector
 from src.hand_track.feature_extractor import FEATURE_NAMES
 
 # ── 输出目录 ────────────────────────────────────────────────────────────────
-OUT_DIR = os.path.join(os.path.dirname(__file__), '..', 'data_prestudy', 'tap')
+OUT_DIR = os.path.join(os.path.dirname(__file__), 'data', 'tap')
 
 # ── 贴纸 HSV 阈值 ────────────────────────────────────────────────────────────
 STICKER_HSV = {

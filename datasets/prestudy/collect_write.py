@@ -8,7 +8,7 @@ Pre-study · Task B：连续书写场景采集
 特征提取：通过 DualHandDetector.last_feat（HandFeatureExtractor）与 src 完全一致。
 flow_mag 额外从指尖 ROI 单独计算（HandFeatureExtractor 中无此特征）。
 
-输出（datasets/data_prestudy/write/）：
+输出（datasets/prestudy/data/write/）：
   prestudy_write_{subject}_{lighting}_{speed}.csv
   prestudy_write_{subject}_{lighting}_{speed}_raw.mp4   — 原始视频
   prestudy_write_{subject}_{lighting}_{speed}_ui.mp4    — UI 视频
@@ -32,7 +32,7 @@ sys.path.insert(0, PROJECT_ROOT)
 from src.hand_track.dual_hand_detector import DualHandDetector
 from src.hand_track.feature_extractor import FEATURE_NAMES
 
-OUT_DIR = os.path.join(os.path.dirname(__file__), '..', 'data_prestudy', 'write')
+OUT_DIR = os.path.join(os.path.dirname(__file__), 'data', 'write')
 
 # 与 HandFeatureExtractor._ROI_HALF 保持一致
 _ROI_HALF    = 16
