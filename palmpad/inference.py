@@ -34,9 +34,6 @@ _normalise = transforms.Compose([
     transforms.Normalize(_IMAGENET_MEAN, _IMAGENET_STD),
 ])
 
-mp_hands = mp.solutions.hands
-
-
 def _bbox_from_landmarks(lms, indices, h, w, pad=0.3):
     pts = np.array([[lms[i].x * w, lms[i].y * h] for i in indices])
     x1, y1 = pts.min(axis=0)
@@ -117,7 +114,14 @@ class PalmPadInference:
             torch.from_numpy(f.copy()).permute(2, 0, 1) for f in self._flows
         ]).unsqueeze(0)
 
-        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+        if self.device.type == "cuda":
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                logits = self.model(
+                    palm_t.to(self.device),
+                    index_t.to(self.device),
+                    flow_t.to(self.device),
+                )
+        else:
             logits = self.model(
                 palm_t.to(self.device),
                 index_t.to(self.device),
@@ -151,6 +155,7 @@ def run(args):
     landmark_q: queue.Queue = queue.Queue(maxsize=4)
 
     # MediaPipe thread
+    mp_hands = mp.solutions.hands
     def mp_worker():
         with mp_hands.Hands(
             static_image_mode=False, max_num_hands=2,
