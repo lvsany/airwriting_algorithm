@@ -47,7 +47,8 @@ from contact_detectors import REGISTRY, build_detector, ContactDetectorBase
 
 _DEFAULT_CKPT = os.path.join(_DATASETS_DIR, "palmpad_checkpoints", "best.pt")
 _EXP3_ROOT    = os.path.join(_DATASETS_DIR, "Exp3")
-_OWN_DIR      = os.path.join(_EXP3_ROOT, "own_framework")
+_OWN_DIR      = os.path.join(_EXP3_ROOT, "own_framework")   # JSON data
+_VIDEO_DIR    = os.path.join(_EXP3_ROOT, "video")           # raw recordings
 
 C = {
     'bg':      (20,  20,  25),
@@ -137,8 +138,10 @@ class Exp3Collector:
         self.out_dir   = os.path.join(exp3_root, detector.name)
         os.makedirs(self.out_dir, exist_ok=True)
         self.out_file  = os.path.join(self.out_dir, f"exp3_{user_id}.json")
-        # out_video is only written in camera mode; defined here for reference
-        self.out_video = os.path.join(self.out_dir,
+        # out_video: camera mode only; videos always go to Exp3/video/
+        _vid_dir = os.path.join(exp3_root, "video")
+        os.makedirs(_vid_dir, exist_ok=True)
+        self.out_video = os.path.join(_vid_dir,
                                       f"exp3_{user_id}_raw_{int(time.time())}.mp4")
 
         # Workflow states
@@ -430,12 +433,15 @@ def main():
     # Method-specific
     parser.add_argument("--checkpoint", default=_DEFAULT_CKPT,
                         help="[palmpad] Path to best.pt checkpoint")
+    parser.add_argument("--headless", action="store_true",
+                        help="Disable OpenCV window (auto-enabled when DISPLAY is unset)")
     args = parser.parse_args()
 
     # ------------------------------------------------------------------ #
     #  Mode selection + fast pre-flight checks (before loading any model) #
     # ------------------------------------------------------------------ #
     is_replay = (args.method != "own_framework")
+    headless  = args.headless or (not os.environ.get("DISPLAY", ""))
 
     if is_replay:
         ref_json = (args.trials
@@ -446,9 +452,9 @@ def main():
             print(f"    python datasets/test.py --user {args.user} --method own_framework")
             sys.exit(1)
 
-        video_path = args.video or _find_latest_video(_OWN_DIR, args.user)
+        video_path = args.video or _find_latest_video(_VIDEO_DIR, args.user)
         if not video_path:
-            print(f"[ERROR] No reference video found in {_OWN_DIR}/")
+            print(f"[ERROR] No reference video found in {_VIDEO_DIR}/")
             print("  Specify one explicitly with --video path/to/file.mp4")
             sys.exit(1)
 
@@ -545,60 +551,72 @@ def main():
         if vout_raw is not None:
             vout_raw.write(frame_raw)
 
-        # HUD
-        draw_hud(frame, collector.get_ui_text())
+        if not headless:
+            # HUD
+            draw_hud(frame, collector.get_ui_text())
 
-        # Top-right info
-        h_f, w_f = frame.shape[:2]
-        if is_replay and total_frames > 0:
-            info = f"{frame_id}/{total_frames} ({100*frame_id//total_frames}%)"
+            # Top-right info
+            h_f, w_f = frame.shape[:2]
+            if is_replay and total_frames > 0:
+                info = f"{frame_id}/{total_frames} ({100*frame_id//total_frames}%)"
+            else:
+                info = f"FPS: {_fps_val:.1f}"
+            (tw, th), _ = cv2.getTextSize(info, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 1)
+            cv2.putText(frame, info, (w_f - tw - 20, th + 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.65, C['accent'], 1, cv2.LINE_AA)
+
+            # Cursor
+            if pos != (0, 0):
+                color = C['writing'] if is_writing else C['hover']
+                cv2.circle(frame, pos, 12 if is_writing else 8,
+                           color, -1 if is_writing else 2, cv2.LINE_AA)
+
+            # Strokes
+            draw_strokes(frame, collector.current_strokes,
+                         collector.current_stroke, C['accent'])
+
+            # Calibration progress bar
+            if collector.state == "CALIB":
+                hr = collector.detector.hover_result
+                if hr:
+                    cv2.rectangle(frame, (35, 120),
+                                  (35 + int(hr.progress * 300), 135), C['hover'], -1)
+                    cv2.rectangle(frame, (35, 120), (335, 135), C['text'], 2)
+
+            cv2.imshow("Exp 3", frame)
+
+            key = cv2.waitKey(1) & 0xFF
+            if key in (27, ord('q')):
+                break
+            elif key == ord(' '):
+                if collector.state not in ["CALIB", "DONE"]:
+                    collector.next_trial()
+            elif key == ord('c'):
+                collector._clear_stroke()
+                print("[CLEAR] Current trial cleared.")
+            elif key == ord('r'):
+                if collector.state not in ["CALIB", "DONE"]:
+                    collector.restart_current_phase()
+            elif key == ord('n'):
+                collector.skip_phase()
+            elif key in (ord('h'), ord('H')):
+                collector.trigger_recalibration()
         else:
-            info = f"FPS: {_fps_val:.1f}"
-        (tw, th), _ = cv2.getTextSize(info, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 1)
-        cv2.putText(frame, info, (w_f - tw - 20, th + 15),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, C['accent'], 1, cv2.LINE_AA)
-
-        # Cursor
-        if pos != (0, 0):
-            color = C['writing'] if is_writing else C['hover']
-            cv2.circle(frame, pos, 12 if is_writing else 8,
-                       color, -1 if is_writing else 2, cv2.LINE_AA)
-
-        # Strokes
-        draw_strokes(frame, collector.current_strokes,
-                     collector.current_stroke, C['accent'])
-
-        # Calibration progress bar
-        if collector.state == "CALIB":
-            hr = collector.detector.hover_result
-            if hr:
-                cv2.rectangle(frame, (35, 120),
-                              (35 + int(hr.progress * 300), 135), C['hover'], -1)
-                cv2.rectangle(frame, (35, 120), (335, 135), C['text'], 2)
-
-        cv2.imshow("Exp 3", frame)
-
-        key = cv2.waitKey(1) & 0xFF
-        if key in (27, ord('q')):
-            break
-        elif key == ord(' '):
-            if collector.state not in ["CALIB", "DONE"]:
-                collector.next_trial()
-        elif key == ord('c'):
-            collector._clear_stroke()
-            print("[CLEAR] Current trial cleared.")
-        elif key == ord('r'):
-            if collector.state not in ["CALIB", "DONE"]:
-                collector.restart_current_phase()
-        elif key == ord('n'):
-            collector.skip_phase()
-        elif key in (ord('h'), ord('H')):
-            collector.trigger_recalibration()
+            # Headless: print progress every 300 frames
+            if frame_id % 300 == 0:
+                pct = f"{100*frame_id//total_frames}%" if total_frames else f"{frame_id}f"
+                state_info = collector.state
+                if collector.state in ("LEVEL1","LEVEL2","LEVEL3"):
+                    state_info += f" trial {collector.current_trial_idx+1}/{len(collector._targets())}"
+                print(f"\r  [{pct}] {state_info}  writing={is_writing}", end="", flush=True)
 
     cap.release()
     if vout_raw is not None:
         vout_raw.release()
-    cv2.destroyAllWindows()
+    if not headless:
+        cv2.destroyAllWindows()
+    if headless and is_replay:
+        print()  # newline after progress line
     print(f"\nDone. Data → {collector.out_file}")
     if is_replay:
         print(f"  Trials processed: L1={sum(1 for r in collector.all_data if r['level']=='LEVEL1')}"

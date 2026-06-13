@@ -5,8 +5,8 @@
 ```
 第一步：用自有方法采集参考数据（摄像头模式，自动录制原始视频）
   python datasets/test.py --user U01 --method own_framework
-  → Exp3/own_framework/exp3_U01.json
-  → Exp3/own_framework/exp3_U01_raw_<ts>.mp4
+  → Exp3/own_framework/exp3_U01.json   ← 接触轨迹
+  → Exp3/video/exp3_U01_raw_<ts>.mp4  ← 原始录像
 
 第二步：在服务器上用其他方法对同一段视频重跑（回放模式，无需摄像头）
   python datasets/test.py --user U01 --method palmpad
@@ -32,14 +32,16 @@ datasets/
 │   └── __init__.py             # 注册表 + build_detector() 工厂函数
 │
 ├── Exp3/
-│   ├── own_framework/          # 自有方法采集的数据
+│   ├── video/                  # 原始录像（摄像头模式自动保存于此）
+│   │   ├── exp3_U01_raw_<ts>.mp4
+│   │   └── ...
+│   ├── own_framework/          # 自有方法的接触轨迹 JSON + 识别结果
 │   │   ├── exp3_U01.json
-│   │   ├── exp3_U01_raw_*.mp4
+│   │   ├── exp3_U01_results.json
 │   │   └── ...
-│   ├── palmpad/                # PalmPad 方法采集的数据
+│   ├── palmpad/                # PalmPad 方法的接触轨迹 JSON（回放模式生成）
 │   │   └── ...
-│   ├── <future_method>/        # 未来新方法的数据（自动创建）
-│   └── data/                   # 历史数据（旧版采集，已保留）
+│   └── <future_method>/        # 未来新方法的数据（自动创建）
 │
 ├── palmpad_checkpoints/
 │   └── best.pt                 # PalmPad 接触检测模型权重
