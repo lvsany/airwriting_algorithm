@@ -214,6 +214,10 @@ class Exp3Collector:
         self.current_stroke  = []
         self.prev_writing    = False
 
+        # Keyboard event log (camera mode only)
+        self.keyboard_events = []
+        self.events_file     = self.out_file.replace('.json', '_events.json')
+
     # ------------------------------------------------------------------
     @property
     def state(self):
@@ -326,6 +330,16 @@ class Exp3Collector:
         self.current_strokes = []
         self.current_stroke  = []
 
+    def record_key_event(self, key_name: str):
+        if self.is_replay:
+            return
+        self.keyboard_events.append({"key": key_name, "t": time.time()})
+        self._write_events()
+
+    def _write_events(self):
+        with open(self.events_file, 'w', encoding='utf-8') as f:
+            json.dump(self.keyboard_events, f, indent=2)
+
     # ------------------------------------------------------------------
     def process_frame(self, frame: np.ndarray, frame_id: int):
         is_writing = self.detector.process(frame)
@@ -418,6 +432,31 @@ def draw_strokes(frame, strokes, current, color):
 # Entry point
 # ---------------------------------------------------------------------------
 
+def _load_replay_events(events_json: str) -> list:
+    if not os.path.exists(events_json):
+        return []
+    try:
+        with open(events_json, 'r', encoding='utf-8') as f:
+            return sorted(json.load(f), key=lambda e: e['t'])
+    except Exception:
+        return []
+
+
+def _fire_replay_event(key_name: str, collector: Exp3Collector):
+    if key_name == 'space' and collector.state not in ["CALIB", "DONE"]:
+        collector.next_trial()
+        print(f"\n[REPLAY EVT] SPACE → next_trial  (state={collector.state}  trial={collector.current_trial_idx})")
+    elif key_name == 'clear':
+        collector._clear_stroke()
+        print(f"\n[REPLAY EVT] C → _clear_stroke")
+    elif key_name == 'restart' and collector.state not in ["CALIB", "DONE"]:
+        collector.restart_current_phase()
+        print(f"\n[REPLAY EVT] R → restart_phase  ({collector.state})")
+    elif key_name == 'skip':
+        collector.skip_phase()
+        print(f"\n[REPLAY EVT] N → skip_phase")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Exp 3 Data Collection / Replay")
     parser.add_argument("--user",       default="test_01", help="User ID (e.g. U01)")
@@ -491,10 +530,17 @@ def main():
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         vout_raw     = None   # no re-recording in replay mode
 
+        # Load keyboard events recorded during own_framework collection
+        _events_json = ref_json.replace('.json', '_events.json')
+        replay_events = _load_replay_events(_events_json)
+        _m = re.search(r'_raw_(\d+)\.mp4$', video_path)
+        replay_video_start_t = int(_m.group(1)) if _m else None
+
         print(f"\nExp3  user={args.user}  method={args.method}  [REPLAY MODE]")
         print(f"  Source video → {video_path}")
         print(f"  Trials from  → {ref_json}  "
               f"({len(l1_seq)} L1, {len(l2_seq)} L2, {len(l3_seq)} L3)")
+        print(f"  Events       → {_events_json}  ({len(replay_events)} keyboard events)")
         print(f"  Output       → {collector.out_dir}")
 
     else:
@@ -516,6 +562,8 @@ def main():
         vout_raw = cv2.VideoWriter(collector.out_video, fourcc, rec_fps, (1280, 720))
 
         total_frames = 0
+        replay_events        = []
+        replay_video_start_t = None
 
         print(f"\nExp3  user={args.user}  method={args.method}  [CAMERA MODE]")
         print(f"  Output → {collector.out_dir}")
@@ -547,6 +595,12 @@ def main():
             _fps_t   = _now
 
         is_writing, pos = collector.process_frame(frame, frame_id)
+
+        # ---- Replay keyboard events at the correct video timestamp ------
+        if is_replay and replay_video_start_t is not None and replay_events:
+            cur_t = replay_video_start_t + cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0
+            while replay_events and replay_events[0]['t'] <= cur_t:
+                _fire_replay_event(replay_events.pop(0)['key'], collector)
 
         if vout_raw is not None:
             vout_raw.write(frame_raw)
@@ -591,14 +645,18 @@ def main():
             elif key == ord(' '):
                 if collector.state not in ["CALIB", "DONE"]:
                     collector.next_trial()
+                    collector.record_key_event('space')
             elif key == ord('c'):
                 collector._clear_stroke()
+                collector.record_key_event('clear')
                 print("[CLEAR] Current trial cleared.")
             elif key == ord('r'):
                 if collector.state not in ["CALIB", "DONE"]:
                     collector.restart_current_phase()
+                    collector.record_key_event('restart')
             elif key == ord('n'):
                 collector.skip_phase()
+                collector.record_key_event('skip')
             elif key in (ord('h'), ord('H')):
                 collector.trigger_recalibration()
         else:
